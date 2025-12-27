@@ -14,7 +14,7 @@
             <div class="space-y-4">
                 <input type="text" id="login-user" placeholder="Username" class="w-full p-2 border rounded">
                 <input type="password" id="login-pass" placeholder="Password" class="w-full p-2 border rounded">
-                <button onclick="handleLogin()" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Login</button>
+                <button id="login-btn" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Login</button>
             </div>
             <p id="login-error" class="text-red-500 mt-4 text-sm hidden"></p>
         </div>
@@ -24,7 +24,7 @@
         <div class="max-w-6xl mx-auto">
             <div class="flex justify-between items-center mb-8">
                 <h1 class="text-3xl font-bold text-gray-800">Inventory Management</h1>
-                <button onclick="logout()" class="text-red-600 font-semibold">Logout</button>
+                <button id="logout-btn" class="text-red-600 font-semibold">Logout</button>
             </div>
 
             <div class="bg-white p-6 rounded-lg shadow-sm mb-8">
@@ -34,7 +34,7 @@
                     <input type="text" id="card-name" placeholder="Card Name" class="p-2 border rounded">
                     <input type="number" id="card-price" placeholder="Price" class="p-2 border rounded">
                     <input type="number" id="card-stock" placeholder="Stock" class="p-2 border rounded">
-                    <button onclick="addCard()" class="bg-green-600 text-white p-2 rounded hover:bg-green-700 col-span-full md:col-span-1">Add Card</button>
+                    <button id="add-card-btn" class="bg-green-600 text-white p-2 rounded hover:bg-green-700 col-span-full md:col-span-1">Add Card</button>
                 </div>
             </div>
 
@@ -44,4 +44,98 @@
                         <tr>
                             <th class="p-4">Card ID</th>
                             <th class="p-4">Name</th>
-                            <th class="p-4
+                            <th class="p-4">Price</th>
+                            <th class="p-4">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update this URL to YOUR actual Render backend URL
+        const API_URL = 'https://k10-backend.onrender.com/api'; 
+        let authToken = null;
+
+        // --- Wait for page to load, then attach listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Login Button
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+            
+            // Logout Button
+            document.getElementById('logout-btn').addEventListener('click', () => location.reload());
+            
+            // Add Card Button
+            document.getElementById('add-card-btn').addEventListener('click', addCard);
+        });
+
+        async function handleLogin() {
+            const username = document.getElementById('login-user').value;
+            const password = document.getElementById('login-pass').value;
+
+            try {
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    authToken = data.token;
+                    showDashboard();
+                } else {
+                    const errEl = document.getElementById('login-error');
+                    errEl.innerText = data.error || "Login failed";
+                    errEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                alert("Cannot connect to backend. Check your Render logs.");
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('dashboard-section').classList.remove('hidden');
+            loadInventory();
+        }
+
+        async function loadInventory() {
+            const response = await fetch(`${API_URL}/inventory`);
+            const cards = await response.json();
+            const tableBody = document.getElementById('inventory-table-body');
+            tableBody.innerHTML = cards.map(card => `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="p-4 font-mono text-sm">${card.card_id}</td>
+                    <td class="p-4">${card.card_name}</td>
+                    <td class="p-4">$${card.price}</td>
+                    <td class="p-4">${card.stock_quantity}</td>
+                </tr>
+            `).join('');
+        }
+
+        async function addCard() {
+            const cardData = {
+                card_id: document.getElementById('card-id').value,
+                card_name: document.getElementById('card-name').value,
+                price: document.getElementById('card-price').value,
+                stock_quantity: document.getElementById('card-stock').value
+            };
+
+            const response = await fetch(`${API_URL}/inventory/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cardData)
+            });
+
+            if (response.ok) {
+                alert("Card Added!");
+                loadInventory();
+            }
+        }
+    </script>
+</body>
+</html>
