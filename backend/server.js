@@ -1,43 +1,55 @@
-require('dotenv').config(); // Load variables from .env if running locally
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('./db'); // This imports your Aiven MySQL connection
+const db = require('./db'); // Ensure your db.js has the SSL settings we discussed
 
 const app = express();
 
-// Use Render's port or default to 5000 for local testing
+// --- 1. DYNAMIC PORT FOR RENDER ---
 const PORT = process.env.PORT || 5000;
 
-// --- 1. Middleware ---
-app.use(cors()); 
+// --- 2. ADVANCED CORS CONFIGURATION ---
+// This tells the server to trust your specific GitHub Pages site
+const corsOptions = {
+  origin: 'https://yukino-hub.github.io', 
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // This handles the "Preflight" browser check
+
+// --- 3. MIDDLEWARE ---
 app.use(express.json()); 
 
-// --- 2. Health Check Route ---
+// --- 4. HEALTH CHECK ROUTE ---
 app.get('/', (req, res) => {
   res.send('K10 System Backend is Online and Connected to Aiven Cloud MySQL!');
 });
 
-// --- 3. GET ALL CARDS FROM INVENTORY (Crucial for your Frontend!) ---
+// --- 5. INVENTORY: GET ALL CARDS ---
 app.get('/api/inventory', async (req, res) => {
   try {
     const [cards] = await db.execute('SELECT * FROM inventory');
     res.json(cards);
   } catch (error) {
-    console.error(error);
+    console.error("Database Error:", error.message);
     res.status(500).json({ error: 'Failed to fetch inventory' });
   }
 });
 
-// --- 4. Staff Registration Route ---
+// --- 6. AUTH: STAFF REGISTRATION ---
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
   try {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const [result] = await db.execute(
+    await db.execute(
       'INSERT INTO staff (username, password_hash) VALUES (?, ?)',
       [username, hashedPassword]
     );
@@ -52,21 +64,26 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// --- 5. Staff Login Route ---
+// --- 7. AUTH: STAFF LOGIN ---
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const [users] = await db.execute('SELECT * FROM staff WHERE username = ?', [username]);
-    if (users.length === 0) return res.status(400).json({ error: 'Invalid username or password' });
+    
+    if (users.length === 0) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
 
     const user = users[0];
     const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) return res.status(400).json({ error: 'Invalid username or password' });
+    
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
 
-    // Use the secret from Render Environment Variables
     const token = jwt.sign(
       { id: user.id, role: user.role }, 
-      process.env.JWT_SECRET || 'fallback_secret', 
+      process.env.JWT_SECRET || 'your_fallback_secret', 
       { expiresIn: '1h' }
     );
 
@@ -76,24 +93,27 @@ app.post('/api/auth/login', async (req, res) => {
       user: { id: user.id, username: user.username, role: user.role }
     });
   } catch (error) {
-    console.error(error);
+    console.error("Login Error:", error.message);
     res.status(500).json({ error: 'Server error during login' });
   }
 });
 
-// --- 6. Add Card Route ---
-app.get('/api/inventory', async (req, res) => {
+// --- 8. INVENTORY: ADD NEW CARD ---
+app.post('/api/inventory/add', async (req, res) => {
+  const { card_id, card_name, price, stock_quantity } = req.body;
   try {
-    const [cards] = await db.execute('SELECT * FROM inventory');
-    res.json(cards);
+    const [result] = await db.execute(
+      'INSERT INTO inventory (card_id, card_name, price, stock_quantity) VALUES (?, ?, ?, ?)',
+      [card_id, card_name, price, stock_quantity]
+    );
+    res.status(201).json({ message: 'Card added to inventory!', id: result.insertId });
   } catch (error) {
-    // This will print the EXACT error to your Render Logs
-    console.error("DATABASE ERROR:", error.message); 
-    res.status(500).json({ error: 'Database error: ' + error.message });
+    console.error("Add Card Error:", error.message);
+    res.status(500).json({ error: 'Failed to add card to inventory' });
   }
 });
 
-// --- 7. Start Server ---
+// --- 9. START SERVER ---
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
