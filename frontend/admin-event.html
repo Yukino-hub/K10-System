@@ -41,7 +41,6 @@
                         <option value="Other">Other</option>
                     </select>
                 </div>
-
                 <div>
                     <label class="text-xs text-gray-500 block mb-1">Date & Time</label>
                     <input type="datetime-local" id="event-date" class="w-full p-2 border rounded">
@@ -55,22 +54,21 @@
                     <input type="number" id="event-cap" value="32" class="w-full p-2 border rounded">
                 </div>
             </div>
-            
             <button onclick="publishNewEvent()" class="mt-6 w-full md:w-auto bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700 font-semibold shadow-sm">
                 Publish Event
             </button>
         </div>
 
         <h3 class="text-xl font-bold text-gray-700 mb-4">Upcoming Events</h3>
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden mb-12">
             <table class="w-full text-left border-collapse">
                 <thead class="bg-gray-50 border-b">
                     <tr>
                         <th class="p-4">Date</th>
                         <th class="p-4">Game</th>
                         <th class="p-4">Event Name</th>
-                        <th class="p-4">Registrations</th>
-                        <th class="p-4">Fee</th>
+                        <th class="p-4">Seats</th>
+                        <th class="p-4">Action</th>
                     </tr>
                 </thead>
                 <tbody id="events-table-body">
@@ -80,14 +78,39 @@
 
     </div>
 
+    <div id="player-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+            <div class="bg-blue-600 px-6 py-4 flex justify-between items-center">
+                <h3 id="modal-title" class="text-white font-bold text-lg">Event Players</h3>
+                <button onclick="closeModal()" class="text-blue-200 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div class="p-6 max-h-[60vh] overflow-y-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs font-bold text-gray-500 border-b">
+                            <th class="pb-2">Player Name</th>
+                            <th class="pb-2">Contact Info</th>
+                            <th class="pb-2 text-right">Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-body" class="text-sm">
+                        </tbody>
+                </table>
+                <div id="modal-loading" class="text-center py-4 text-gray-500 hidden">Loading...</div>
+                <div id="modal-empty" class="text-center py-4 text-gray-400 hidden">No players registered yet.</div>
+            </div>
+            <div class="bg-gray-50 px-6 py-3 text-right">
+                <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded text-gray-800 font-medium">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_URL = 'https://k10-system.onrender.com/api';
 
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('k10_token');
-            if (!token) {
-                window.location.href = 'admin.html'; 
-            }
+            if (!token) window.location.href = 'admin.html'; 
             loadEvents();
 
             document.getElementById('logout-btn').addEventListener('click', () => {
@@ -96,7 +119,7 @@
             });
         });
 
-        // --- FIXED: Function renamed here as well ---
+        // 1. Create Event
         async function publishNewEvent() {
             const token = localStorage.getItem('k10_token');
             const eventData = {
@@ -132,6 +155,7 @@
             } catch (err) { console.error(err); }
         }
 
+        // 2. Load Event List
         async function loadEvents() {
             try {
                 const res = await fetch(`${API_URL}/events`);
@@ -146,8 +170,7 @@
                 tbody.innerHTML = events.map(e => `
                     <tr class="border-b hover:bg-gray-50">
                         <td class="p-4 text-sm font-mono text-gray-600">
-                            ${new Date(e.event_date).toLocaleDateString()} <br>
-                            ${new Date(e.event_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            ${new Date(e.event_date).toLocaleDateString()}
                         </td>
                         <td class="p-4">
                             <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded uppercase">${e.game_title}</span>
@@ -158,10 +181,57 @@
                                 ${e.current_players} / ${e.max_players}
                             </span>
                         </td>
-                        <td class="p-4 text-gray-600">$${e.entry_fee}</td>
+                        <td class="p-4">
+                            <button onclick="viewPlayers(${e.id}, '${e.title}')" class="text-sm bg-white border border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1 rounded transition">
+                                View Players
+                            </button>
+                        </td>
                     </tr>
                 `).join('');
             } catch (err) { console.error(err); }
+        }
+
+        // 3. View Players (Modal Logic)
+        async function viewPlayers(eventId, eventTitle) {
+            const modal = document.getElementById('player-modal');
+            const tbody = document.getElementById('modal-body');
+            const loading = document.getElementById('modal-loading');
+            const emptyMsg = document.getElementById('modal-empty');
+            
+            // Reset Modal
+            document.getElementById('modal-title').innerText = eventTitle;
+            tbody.innerHTML = '';
+            loading.classList.remove('hidden');
+            emptyMsg.classList.add('hidden');
+            modal.classList.remove('hidden'); // Show Modal
+
+            try {
+                const res = await fetch(`${API_URL}/events/${eventId}/players`);
+                const players = await res.json();
+                
+                loading.classList.add('hidden');
+
+                if (players.length === 0) {
+                    emptyMsg.classList.remove('hidden');
+                    return;
+                }
+
+                tbody.innerHTML = players.map(p => `
+                    <tr class="border-b last:border-0 hover:bg-gray-50">
+                        <td class="py-3 font-medium text-gray-800">${p.name}</td>
+                        <td class="py-3 text-gray-600">${p.contact_info}</td>
+                        <td class="py-3 text-right text-gray-400 text-xs">${new Date(p.registered_at).toLocaleDateString()}</td>
+                    </tr>
+                `).join('');
+
+            } catch (err) {
+                console.error(err);
+                loading.innerText = "Error loading list.";
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('player-modal').classList.add('hidden');
         }
     </script>
 </body>
