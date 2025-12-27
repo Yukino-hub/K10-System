@@ -121,7 +121,7 @@ app.post('/api/inventory/add', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         barcode || null, 
-        game_title || 'Hololive', 
+        game_title || 'Test', 
         product_type || 'Single', 
         card_id || null, 
         card_name, 
