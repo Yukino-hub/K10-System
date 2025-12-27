@@ -17,31 +17,25 @@
 </head>
 <body class="bg-gray-100 font-sans min-h-screen">
 
-    <!-- Header -->
     <header class="bg-blue-600 text-white shadow-md">
         <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
             <h1 class="text-3xl font-bold">K10 Card Shop</h1>
-            <a href="index.html" class="text-sm bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded">Staff Login</a>
+            <a href="admin.html" class="text-sm bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded">Staff Login</a>
         </div>
     </header>
 
-    <!-- Main Content -->
     <main id="app" class="max-w-7xl mx-auto px-4 py-8">
 
-        <!-- Loading State -->
         <div id="loading" class="text-center py-20">
             <p class="text-xl text-gray-600">Loading shop inventory...</p>
         </div>
 
-        <!-- Game List View -->
         <div id="game-list-view" class="hidden">
             <h2 class="text-2xl font-semibold mb-6 text-gray-800">Browse by Game</h2>
             <div id="game-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                <!-- Game cards will be injected here -->
-            </div>
+                </div>
         </div>
 
-        <!-- Product List View -->
         <div id="product-list-view" class="hidden">
             <div class="flex items-center mb-6">
                 <button id="back-btn" class="flex items-center text-blue-600 hover:text-blue-800 font-semibold mr-4">
@@ -54,8 +48,7 @@
             </div>
 
             <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <!-- Product cards will be injected here -->
-            </div>
+                </div>
         </div>
 
     </main>
@@ -67,7 +60,8 @@
     </footer>
 
     <script>
-        const API_URL = 'http://localhost:5000/api'; // Adjust if deployed
+        // --- FIXED: Use your Live Render URL ---
+        const API_URL = 'https://k10-system.onrender.com/api'; 
 
         // State
         let allProducts = [];
@@ -98,7 +92,7 @@
                 showGameList();
             } catch (err) {
                 console.error(err);
-                loadingEl.innerHTML = `<p class="text-red-500">Error loading inventory. Please try again later.</p>`;
+                loadingEl.innerHTML = `<p class="text-red-500">Error loading inventory. Backend might be waking up (Wait 30s).</p>`;
             }
         }
 
@@ -134,8 +128,8 @@
                     <p class="text-gray-500 mt-2">${games[title].length} Items</p>
                 </div>
             `).join('');
-
-            // Expose function to window for onclick
+            
+            // Expose to window so onclick works in template string
             window.showProductList = showProductList;
         }
 
