@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      # This sets up the 'root' user and a dedicated app user
+      MYSQL_ROOT_PASSWORD: mysecretpassword
+      MYSQL_DATABASE: k10_db
+      MYSQL_USER: k10_admin
+      MYSQL_PASSWORD: k10_password
+    ports:
+      - "3306:3306"
+    volumes:
+      # This ensures your staff/inventory data isn't deleted when you stop Docker
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
