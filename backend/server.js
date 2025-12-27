@@ -3,14 +3,14 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('./db'); // Ensure your db.js has the SSL settings we discussed
+const db = require('./db'); 
 
 const app = express();
 
-// --- 1. DYNAMIC PORT FOR RENDER ---
+// --- 1. CONFIGURATION ---
 const PORT = process.env.PORT || 5000;
 
-// --- 2. ADVANCED CORS CONFIGURATION (Regex Fixed) ---
+// Advanced CORS (Regex Fixed for Node 22+)
 const corsOptions = {
   origin: 'https://yukino-hub.github.io', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -20,29 +20,20 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-// Use Regex pattern to prevent "PathError" crash on newer Node versions
 app.options(/(.*)/, cors(corsOptions)); 
 
-// --- 3. MIDDLEWARE ---
 app.use(express.json()); 
 
-// --- 4. HEALTH CHECK ROUTE ---
+// --- 2. HEALTH CHECK ---
 app.get('/', (req, res) => {
   res.send('K10 System Backend is Online and Connected to Aiven Cloud MySQL!');
 });
 
-// --- 5. INVENTORY: GET ALL PRODUCTS ---
-app.get('/api/inventory', async (req, res) => {
-  try {
-    const [products] = await db.execute('SELECT * FROM inventory ORDER BY created_at DESC');
-    res.json(products);
-  } catch (error) {
-    console.error("Database Error:", error.message);
-    res.status(500).json({ error: 'Failed to fetch inventory' });
-  }
-});
+// ==========================================
+// AUTH SYSTEM (Staff)
+// ==========================================
 
-// --- 6. AUTH: STAFF REGISTRATION ---
+// Register New Staff
 app.post('/api/auth/register', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -64,27 +55,23 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// --- 7. AUTH: STAFF LOGIN ---
+// Staff Login
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const [users] = await db.execute('SELECT * FROM staff WHERE username = ?', [username]);
     
-    if (users.length === 0) {
-      return res.status(400).json({ error: 'Invalid username or password' });
-    }
+    if (users.length === 0) return res.status(400).json({ error: 'Invalid username or password' });
 
     const user = users[0];
     const isMatch = await bcrypt.compare(password, user.password_hash);
     
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid username or password' });
-    }
+    if (!isMatch) return res.status(400).json({ error: 'Invalid username or password' });
 
     const token = jwt.sign(
       { id: user.id, role: user.role }, 
-      process.env.JWT_SECRET || 'your_fallback_secret', 
-      { expiresIn: '1h' }
+      process.env.JWT_SECRET || 'fallback_secret', 
+      { expiresIn: '8h' } // Increased to 8 hours for convenience
     );
 
     res.json({
@@ -98,20 +85,25 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// --- 8. INVENTORY: ADD UNIVERSAL PRODUCT ---
+// ==========================================
+// INVENTORY SYSTEM
+// ==========================================
+
+// Get All Products
+app.get('/api/inventory', async (req, res) => {
+  try {
+    const [products] = await db.execute('SELECT * FROM inventory ORDER BY created_at DESC');
+    res.json(products);
+  } catch (error) {
+    console.error("Database Error:", error.message);
+    res.status(500).json({ error: 'Failed to fetch inventory' });
+  }
+});
+
+// Add Product (Universal)
 app.post('/api/inventory/add', async (req, res) => {
-  // --- DEBUG LOG: This will print exactly what the server receives ---
-  console.log("📢 SERVER RECEIVED DATA:", req.body);  
   const { 
-    barcode,        // Optional: For sealed boxes
-    game_title,     // 'Hololive', 'One Piece', etc.
-    product_type,   // 'Single', 'Booster Box', etc.
-    card_id,        // Optional: For singles
-    card_name, 
-    set_name,       // Optional: 'Blooming Radiance'
-    rarity,         // Optional: 'RRR'
-    price, 
-    stock_quantity 
+    barcode, game_title, product_type, card_id, card_name, set_name, rarity, price, stock_quantity 
   } = req.body;
 
   try {
@@ -121,7 +113,7 @@ app.post('/api/inventory/add', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         barcode || null, 
-        game_title || 'Test', 
+        game_title || 'Hololive', // Reset default to Hololive
         product_type || 'Single', 
         card_id || null, 
         card_name, 
@@ -134,7 +126,6 @@ app.post('/api/inventory/add', async (req, res) => {
 
     res.status(201).json({ message: 'Product added successfully!', id: result.insertId });
   } catch (error) {
-    // Handle Duplicate Barcodes or IDs
     if (error.code === 'ER_DUP_ENTRY') {
        return res.status(400).json({ error: 'That Barcode or Card ID already exists.' });
     }
@@ -144,10 +135,10 @@ app.post('/api/inventory/add', async (req, res) => {
 });
 
 // ==========================================
-// EVENT SYSTEM ROUTES
+// EVENT SYSTEM
 // ==========================================
 
-// 1. ADMIN: Create a new Event
+// ADMIN: Create Event
 app.post('/api/events/create', async (req, res) => {
   const { title, game_title, event_date, entry_fee, max_players, description } = req.body;
   try {
@@ -163,10 +154,9 @@ app.post('/api/events/create', async (req, res) => {
   }
 });
 
-// 2. PUBLIC: Get Upcoming Events
+// PUBLIC: Get Upcoming Events
 app.get('/api/events', async (req, res) => {
   try {
-    // Show events sorted by date
     const [events] = await db.execute(
       `SELECT * FROM events WHERE event_date >= NOW() ORDER BY event_date ASC`
     );
@@ -176,7 +166,26 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-// 3. PUBLIC: Join Event (The "Smart" Logic)
+// ADMIN: View Registered Players (NEW ROUTE)
+app.get('/api/events/:id/players', async (req, res) => {
+  const eventId = req.params.id;
+  try {
+    const [players] = await db.execute(
+      `SELECT c.name, c.contact_info, r.registered_at 
+       FROM event_registrations r
+       JOIN customers c ON r.customer_id = c.id
+       WHERE r.event_id = ?
+       ORDER BY r.registered_at DESC`,
+      [eventId]
+    );
+    res.json(players);
+  } catch (error) {
+    console.error("Fetch Players Error:", error);
+    res.status(500).json({ error: 'Failed to fetch player list' });
+  }
+});
+
+// PUBLIC: Join Event (Smart Registration)
 app.post('/api/events/join', async (req, res) => {
   const { event_id, player_name, contact_info } = req.body;
   
@@ -184,38 +193,37 @@ app.post('/api/events/join', async (req, res) => {
       return res.status(400).json({ error: "Name and Contact Info are required." });
   }
 
-  const connection = await db.getConnection(); // Get a dedicated connection
+  const connection = await db.getConnection(); // Transaction Start
   try {
-    await connection.beginTransaction(); // Start "Safe Mode"
+    await connection.beginTransaction();
 
-    // A. Check Capacity
+    // 1. Check Capacity
     const [rows] = await connection.execute('SELECT max_players, current_players FROM events WHERE id = ?', [event_id]);
     if (rows.length === 0) throw new Error('Event not found');
     if (rows[0].current_players >= rows[0].max_players) throw new Error('Event is full');
 
-    // B. Find or Create Customer
+    // 2. Find or Create Customer
     let customer_id;
     const [existingCustomer] = await connection.execute('SELECT id FROM customers WHERE contact_info = ?', [contact_info]);
 
     if (existingCustomer.length > 0) {
-      customer_id = existingCustomer[0].id; // Found them!
+      customer_id = existingCustomer[0].id;
     } else {
       const [newCust] = await connection.execute('INSERT INTO customers (name, contact_info) VALUES (?, ?)', [player_name, contact_info]);
-      customer_id = newCust.insertId; // Created new!
+      customer_id = newCust.insertId;
     }
 
-    // C. Register (Check duplicates happens automatically via Database UNIQUE constraint)
+    // 3. Register Player
     await connection.execute('INSERT INTO event_registrations (event_id, customer_id) VALUES (?, ?)', [event_id, customer_id]);
     
-    // D. Update Count
+    // 4. Update Event Count
     await connection.execute('UPDATE events SET current_players = current_players + 1 WHERE id = ?', [event_id]);
 
-    await connection.commit(); // Save changes
+    await connection.commit();
     res.json({ message: 'Registration successful! See you there.' });
 
   } catch (error) {
-    await connection.rollback(); // Undo if anything failed
-    // Check for duplicate registration error
+    await connection.rollback();
     if (error.code === 'ER_DUP_ENTRY') {
         return res.status(400).json({ error: 'You have already registered for this event!' });
     }
@@ -226,7 +234,7 @@ app.post('/api/events/join', async (req, res) => {
   }
 });
 
-// --- 9. START SERVER ---
+// --- START SERVER ---
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
