@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K10 System - Manager Portal</title>
+    <title>K10 Admin - Inventory</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -20,15 +20,22 @@
         </div>
     </div>
 
-    <div id="dashboard-section" class="hidden p-8">
-        <div class="max-w-7xl mx-auto"> <div class="flex justify-between items-center mb-8">
-                <h1 class="text-3xl font-bold text-gray-800">Shop Inventory</h1>
-                <button id="logout-btn" class="text-red-600 font-semibold">Logout</button>
+    <div id="dashboard-section" class="hidden">
+        
+        <nav class="bg-white shadow-sm mb-8">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                <h1 class="text-xl font-bold text-gray-800">K10 Manager Portal</h1>
+                <div class="space-x-4">
+                    <a href="admin.html" class="text-blue-600 font-bold border-b-2 border-blue-600 pb-1">Inventory</a>
+                    <a href="admin-events.html" class="text-gray-600 hover:text-blue-600 font-medium">Events</a>
+                    <button id="logout-btn" class="text-red-600 font-semibold ml-4">Logout</button>
+                </div>
             </div>
+        </nav>
 
+        <div class="max-w-7xl mx-auto px-4 pb-12">
             <div class="bg-white p-6 rounded-lg shadow-sm mb-8">
                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Add New Product</h2>
-                
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <select id="game-title" class="p-2 border rounded bg-gray-50">
                         <option value="Hololive">Hololive OCG</option>
@@ -45,14 +52,12 @@
                     <input type="text" id="barcode" placeholder="Barcode (Scan Here)" class="p-2 border rounded">
                     <input type="text" id="card-id" placeholder="Card ID (e.g. hBP01-001)" class="p-2 border rounded">
                 </div>
-
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <input type="text" id="card-name" placeholder="Product Name" class="p-2 border rounded col-span-2">
-                    <input type="text" id="set-name" placeholder="Set Name (e.g. Blooming Radiance)" class="p-2 border rounded">
-                    <input type="text" id="rarity" placeholder="Rarity (RRR, SP)" class="p-2 border rounded">
+                    <input type="text" id="set-name" placeholder="Set Name" class="p-2 border rounded">
+                    <input type="text" id="rarity" placeholder="Rarity" class="p-2 border rounded">
                     <input type="number" id="price" placeholder="Price ($)" class="p-2 border rounded">
                 </div>
-
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
                     <input type="number" id="stock" placeholder="Qty Stock" class="p-2 border rounded">
                     <button id="add-card-btn" class="bg-green-600 text-white p-2 rounded hover:bg-green-700 md:col-start-4">
@@ -69,7 +74,6 @@
                             <th class="p-4">Type</th>
                             <th class="p-4">ID / Barcode</th>
                             <th class="p-4">Name</th>
-                            <th class="p-4">Rarity</th>
                             <th class="p-4">Price</th>
                             <th class="p-4">Stock</th>
                         </tr>
@@ -81,17 +85,25 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
         const API_URL = 'https://k10-system.onrender.com/api'; 
-        let authToken = null;
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Check if already logged in
+            const token = localStorage.getItem('k10_token');
+            if (token) {
+                showDashboard();
+            }
+
             document.getElementById('login-btn').addEventListener('click', handleLogin);
-            document.getElementById('logout-btn').addEventListener('click', () => location.reload());
+            
+            document.getElementById('logout-btn').addEventListener('click', () => {
+                localStorage.removeItem('k10_token');
+                location.reload();
+            });
+            
             document.getElementById('add-card-btn').addEventListener('click', addProduct);
         });
 
-        // --- AUTH ---
         async function handleLogin() {
             const username = document.getElementById('login-user').value;
             const password = document.getElementById('login-pass').value;
@@ -106,7 +118,8 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    authToken = data.token;
+                    // SAVE TOKEN TO BROWSER SO WE CAN SWITCH PAGES
+                    localStorage.setItem('k10_token', data.token);
                     showDashboard();
                 } else {
                     document.getElementById('login-error').innerText = data.error || "Login failed";
@@ -123,7 +136,6 @@
             loadInventory();
         }
 
-        // --- INVENTORY FUNCTIONS ---
         async function loadInventory() {
             try {
                 const response = await fetch(`${API_URL}/inventory`);
@@ -139,19 +151,17 @@
                             ${p.card_name}
                             <span class="block text-xs text-gray-400">${p.set_name || ''}</span>
                         </td>
-                        <td class="p-4 text-sm">${p.rarity || '-'}</td>
                         <td class="p-4 text-green-700 font-bold">$${p.price}</td>
                         <td class="p-4 font-bold ${p.stock_quantity < 3 ? 'text-red-500' : 'text-gray-700'}">
                             ${p.stock_quantity}
                         </td>
                     </tr>
                 `).join('');
-            } catch (err) {
-                console.error("Load Error:", err);
-            }
+            } catch (err) { console.error("Load Error:", err); }
         }
 
         async function addProduct() {
+            // (Same add product logic as before...)
             const productData = {
                 game_title: document.getElementById('game-title').value,
                 product_type: document.getElementById('product-type').value,
@@ -164,7 +174,6 @@
                 stock_quantity: document.getElementById('stock').value
             };
 
-            // Basic validation
             if(!productData.card_name || !productData.price) {
                 alert("Name and Price are required!");
                 return;
@@ -178,8 +187,7 @@
 
             if (response.ok) {
                 alert("Product Added!");
-                loadInventory(); // Refresh list
-                // Clear inputs for next scan
+                loadInventory();
                 document.getElementById('barcode').value = '';
                 document.getElementById('card-id').value = '';
                 document.getElementById('card-name').value = '';
