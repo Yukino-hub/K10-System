@@ -100,6 +100,8 @@ app.post('/api/auth/login', async (req, res) => {
 
 // --- 8. INVENTORY: ADD UNIVERSAL PRODUCT ---
 app.post('/api/inventory/add', async (req, res) => {
+  // --- DEBUG LOG: This will print exactly what the server receives ---
+  console.log("📢 SERVER RECEIVED DATA:", req.body);  
   const { 
     barcode,        // Optional: For sealed boxes
     game_title,     // 'Hololive', 'One Piece', etc.
