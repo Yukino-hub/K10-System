@@ -134,6 +134,46 @@ app.post('/api/inventory/add', async (req, res) => {
   }
 });
 
+// Update Product
+app.put('/api/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+  const { price, stock_quantity } = req.body;
+
+  try {
+    const [result] = await db.execute(
+      'UPDATE inventory SET price = ?, stock_quantity = ? WHERE id = ?',
+      [price, stock_quantity, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    res.json({ message: 'Product updated successfully' });
+  } catch (error) {
+    console.error("Update Product Error:", error.message);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+// Delete Product
+app.delete('/api/inventory/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [result] = await db.execute('DELETE FROM inventory WHERE id = ?', [id]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error("Delete Product Error:", error.message);
+    res.status(500).json({ error: 'Failed to delete product' });
+  }
+});
+
 // ==========================================
 // EVENT SYSTEM
 // ==========================================
