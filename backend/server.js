@@ -82,17 +82,14 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // --- 6. Add Card Route ---
-app.post('/api/inventory/add', async (req, res) => {
-  const { card_id, card_name, price, stock_quantity } = req.body;
+app.get('/api/inventory', async (req, res) => {
   try {
-    const [result] = await db.execute(
-      'INSERT INTO inventory (card_id, card_name, price, stock_quantity) VALUES (?, ?, ?, ?)',
-      [card_id, card_name, price, stock_quantity]
-    );
-    res.status(201).json({ message: 'Card added to inventory!', id: result.insertId });
+    const [cards] = await db.execute('SELECT * FROM inventory');
+    res.json(cards);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to add card' });
+    // This will print the EXACT error to your Render Logs
+    console.error("DATABASE ERROR:", error.message); 
+    res.status(500).json({ error: 'Database error: ' + error.message });
   }
 });
 
