@@ -87,8 +87,65 @@
         </div>
     </footer>
 
+    <!-- Join Event Modal -->
+    <div id="join-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Join Tournament</h3>
+            <p id="join-event-title" class="text-sm text-gray-500 mb-4"></p>
+            <input type="hidden" id="join-event-id">
+
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Full Name</label>
+                <input type="text" id="join-name" placeholder="Enter your full name" class="border rounded w-full py-2 px-3 text-gray-700 focus:outline-none focus:border-blue-500">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Contact Info</label>
+                <input type="text" id="join-contact" placeholder="Email or Phone Number" class="border rounded w-full py-2 px-3 text-gray-700 focus:outline-none focus:border-blue-500">
+                <p class="text-xs text-gray-400 mt-1">Used for match updates only.</p>
+            </div>
+
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeJoinModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded transition">
+                    Cancel
+                </button>
+                <button onclick="submitJoin()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition shadow-md">
+                    Confirm Registration
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2"></div>
+
     <script>
         const API_URL = 'https://k10-system.onrender.com/api'; 
+
+        // --- TOAST SYSTEM ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const colors = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+            const icon = type === 'success' ? '✅' : '❌';
+
+            toast.className = `${colors} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 transform transition-all duration-300 translate-y-2 opacity-0`;
+            toast.innerHTML = `<span class="font-bold text-lg">${icon}</span><span class="font-medium">${message}</span>`;
+
+            container.appendChild(toast);
+
+            // Animate In
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            // Remove after 3s
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
         // State Management
         let allProducts = [];
@@ -166,12 +223,27 @@
             }
         }
 
-        async function joinEvent(eventId, title) {
-            const name = prompt(`To register for "${title}", please enter your Full Name:`);
-            if(!name) return;
-            
-            const contact = prompt("Please enter your Phone Number or Email (for match updates):");
-            if(!contact) return;
+        function joinEvent(eventId, title) {
+            document.getElementById('join-event-id').value = eventId;
+            document.getElementById('join-event-title').innerText = `Registering for: ${title}`;
+            document.getElementById('join-name').value = '';
+            document.getElementById('join-contact').value = '';
+            document.getElementById('join-modal').classList.remove('hidden');
+        }
+
+        function closeJoinModal() {
+            document.getElementById('join-modal').classList.add('hidden');
+        }
+
+        async function submitJoin() {
+            const eventId = document.getElementById('join-event-id').value;
+            const name = document.getElementById('join-name').value;
+            const contact = document.getElementById('join-contact').value;
+
+            if(!name || !contact) {
+                showToast("Name and Contact Info are required.", "error");
+                return;
+            }
 
             try {
                 const res = await fetch(`${API_URL}/events/join`, {
@@ -183,13 +255,14 @@
                 const data = await res.json();
                 
                 if(res.ok) {
-                    alert("✅ " + data.message);
+                    showToast(data.message, "success");
+                    closeJoinModal();
                     fetchEvents(); // Refresh to update player count
                 } else {
-                    alert("❌ Error: " + data.error);
+                    showToast(data.error, "error");
                 }
             } catch (err) {
-                alert("Connection error. Please try again.");
+                showToast("Connection error. Please try again.", "error");
             }
         }
 
