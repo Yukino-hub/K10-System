@@ -3,72 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K10 Shop - Customer Portal</title>
+    <title>K10 Card Shop - Official Store</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .game-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .game-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
+        .hover-card { transition: transform 0.2s, box-shadow 0.2s; }
+        .hover-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
-<body class="bg-gray-100 font-sans min-h-screen">
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
 
-    <header class="bg-blue-600 text-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-            <h1 class="text-3xl font-bold">K10 Card Shop</h1>
-            <a href="admin.html" class="text-sm bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded">Staff Login</a>
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="bg-blue-600 text-white p-2 rounded-lg font-bold text-xl">K10</div>
+                <h1 class="text-2xl font-bold text-gray-800 tracking-tight">Card Shop</h1>
+            </div>
+            <a href="admin.html" class="text-sm font-medium text-gray-500 hover:text-blue-600 border border-gray-200 px-4 py-2 rounded-full hover:border-blue-600 transition">
+                Staff Login
+            </a>
         </div>
     </header>
 
-    <main id="app" class="max-w-7xl mx-auto px-4 py-8">
-
-        <div id="loading" class="text-center py-20">
-            <p class="text-xl text-gray-600">Loading shop inventory...</p>
+    <div class="bg-blue-600 text-white py-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <h2 class="text-4xl font-extrabold mb-4">Your Hub for TCG & Events</h2>
+            <p class="text-blue-100 text-lg max-w-2xl mx-auto">
+                Official retailer for Hololive OCG, One Piece, and Digimon. Join our weekly tournaments and build your collection today.
+            </p>
         </div>
+    </div>
 
-        <div id="game-list-view" class="hidden">
-            <h2 class="text-2xl font-semibold mb-6 text-gray-800">Browse by Game</h2>
-            <div id="game-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    <main id="app" class="max-w-7xl mx-auto px-4 py-12 flex-grow w-full">
+
+        <section id="events-section" class="mb-16">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                    <span class="bg-red-100 text-red-600 p-2 rounded-lg mr-3">🏆</span>
+                    Upcoming Tournaments
+                </h2>
+            </div>
+            
+            <div id="loading-events" class="text-gray-500 italic">Loading schedule...</div>
+            
+            <div id="events-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 </div>
-        </div>
+        </section>
 
-        <div id="product-list-view" class="hidden">
-            <div class="flex items-center mb-6">
-                <button id="back-btn" class="flex items-center text-blue-600 hover:text-blue-800 font-semibold mr-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
-                    </svg>
-                    Back to Games
-                </button>
-                <h2 id="selected-game-title" class="text-2xl font-bold text-gray-800"></h2>
+        <section id="shop-section">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                <span class="bg-green-100 text-green-600 p-2 rounded-lg mr-3">📦</span>
+                Browse Inventory
+            </h2>
+
+            <div id="loading-inventory" class="text-center py-10">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-500">Loading latest cards...</p>
             </div>
 
-            <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div id="game-list-view" class="hidden">
+                <div id="game-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    </div>
+            </div>
+
+            <div id="product-list-view" class="hidden">
+                <div class="flex items-center mb-6">
+                    <button id="back-btn" class="flex items-center text-gray-600 hover:text-blue-600 font-semibold mr-4 transition">
+                        ← Back to Categories
+                    </button>
+                    <h3 id="selected-game-title" class="text-2xl font-bold text-gray-800 border-l-4 border-blue-500 pl-3"></h3>
                 </div>
-        </div>
+
+                <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    </div>
+            </div>
+        </section>
 
     </main>
 
-    <footer class="bg-gray-800 text-white mt-auto py-6">
-        <div class="max-w-7xl mx-auto px-4 text-center text-gray-400 text-sm">
-            &copy; 2025 K10. All rights reserved.
+    <footer class="bg-gray-800 text-gray-400 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p>&copy; 2024 K10 Card Shop System. All rights reserved.</p>
+            <p class="text-xs mt-2 text-gray-600">Powered by Render & Aiven</p>
         </div>
     </footer>
 
     <script>
-        // --- FIXED: Use your Live Render URL ---
         const API_URL = 'https://k10-system.onrender.com/api'; 
 
-        // State
+        // State Management
         let allProducts = [];
         let games = {};
 
         // DOM Elements
-        const loadingEl = document.getElementById('loading');
+        const eventsGrid = document.getElementById('events-grid');
+        const loadingEvents = document.getElementById('loading-events');
+        
+        const loadingInventory = document.getElementById('loading-inventory');
         const gameListView = document.getElementById('game-list-view');
         const productListView = document.getElementById('product-list-view');
         const gameGrid = document.getElementById('game-grid');
@@ -76,23 +106,110 @@
         const selectedGameTitle = document.getElementById('selected-game-title');
         const backBtn = document.getElementById('back-btn');
 
-        // Init
+        // --- INIT ---
         document.addEventListener('DOMContentLoaded', () => {
+            fetchEvents();
             fetchInventory();
             backBtn.addEventListener('click', showGameList);
         });
 
+        // ==========================================
+        // 1. EVENT SYSTEM
+        // ==========================================
+        async function fetchEvents() {
+            try {
+                const res = await fetch(`${API_URL}/events`);
+                const events = await res.json();
+                
+                loadingEvents.classList.add('hidden');
+
+                if(events.length === 0) {
+                    eventsGrid.innerHTML = `
+                        <div class="col-span-full bg-white p-6 rounded-lg text-center text-gray-500 border border-dashed border-gray-300">
+                            No upcoming tournaments scheduled. Check back later!
+                        </div>`;
+                    return;
+                }
+
+                eventsGrid.innerHTML = events.map(e => {
+                    const date = new Date(e.event_date);
+                    const isFull = e.current_players >= e.max_players;
+                    
+                    return `
+                    <div class="hover-card bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
+                        <div class="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                            <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">${e.game_title}</span>
+                            <span class="text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded border">
+                                ${date.toLocaleDateString()} @ ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </span>
+                        </div>
+                        <div class="p-6 flex-grow">
+                            <h3 class="text-xl font-bold text-gray-800 mb-2">${e.title}</h3>
+                            <div class="flex items-center text-sm text-gray-600 space-x-4 mb-4">
+                                <span class="flex items-center">💰 $${e.entry_fee}</span>
+                                <span class="flex items-center ${isFull ? 'text-red-500 font-bold' : ''}">
+                                    👥 ${e.current_players}/${e.max_players} Players
+                                </span>
+                            </div>
+                        </div>
+                        <div class="px-6 pb-6">
+                            ${isFull 
+                                ? `<button disabled class="w-full bg-gray-100 text-gray-400 font-bold py-2 rounded-lg cursor-not-allowed">Event Full</button>`
+                                : `<button onclick="joinEvent(${e.id}, '${e.title}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition shadow-md hover:shadow-lg">Join Tournament</button>`
+                            }
+                        </div>
+                    </div>
+                `}).join('');
+            } catch (err) {
+                console.error(err);
+                loadingEvents.innerHTML = `<span class="text-red-500">Failed to load events. Backend might be sleeping.</span>`;
+            }
+        }
+
+        async function joinEvent(eventId, title) {
+            const name = prompt(`To register for "${title}", please enter your Full Name:`);
+            if(!name) return;
+            
+            const contact = prompt("Please enter your Phone Number or Email (for match updates):");
+            if(!contact) return;
+
+            try {
+                const res = await fetch(`${API_URL}/events/join`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event_id: eventId, player_name: name, contact_info: contact })
+                });
+                
+                const data = await res.json();
+                
+                if(res.ok) {
+                    alert("✅ " + data.message);
+                    fetchEvents(); // Refresh to update player count
+                } else {
+                    alert("❌ Error: " + data.error);
+                }
+            } catch (err) {
+                alert("Connection error. Please try again.");
+            }
+        }
+
+        // ==========================================
+        // 2. INVENTORY SYSTEM
+        // ==========================================
         async function fetchInventory() {
             try {
                 const res = await fetch(`${API_URL}/inventory`);
                 if (!res.ok) throw new Error('Failed to fetch');
                 allProducts = await res.json();
+                
                 processData(allProducts);
                 renderGameList();
+                
+                loadingInventory.classList.add('hidden');
                 showGameList();
             } catch (err) {
                 console.error(err);
-                loadingEl.innerHTML = `<p class="text-red-500">Error loading inventory. Backend might be waking up (Wait 30s).</p>`;
+                loadingInventory.innerHTML = `<p class="text-red-500">System is waking up... please refresh in 30 seconds.</p>`;
             }
         }
 
@@ -100,15 +217,12 @@
             games = {};
             products.forEach(p => {
                 const title = p.game_title || 'Other';
-                if (!games[title]) {
-                    games[title] = [];
-                }
+                if (!games[title]) games[title] = [];
                 games[title].push(p);
             });
         }
 
         function showGameList() {
-            loadingEl.classList.add('hidden');
             productListView.classList.add('hidden');
             gameListView.classList.remove('hidden');
         }
@@ -122,43 +236,57 @@
 
         function renderGameList() {
             gameGrid.innerHTML = Object.keys(games).map(title => `
-                <div class="game-card bg-white p-6 rounded-lg shadow-sm border border-gray-100 cursor-pointer flex flex-col items-center justify-center h-40"
+                <div class="hover-card bg-white p-6 rounded-xl shadow-sm border border-gray-200 cursor-pointer flex flex-col items-center justify-center h-48 group"
                      onclick="showProductList('${title}')">
+                    <div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center text-3xl mb-4 group-hover:bg-blue-100 transition">
+                        ${getGameIcon(title)}
+                    </div>
                     <h3 class="text-xl font-bold text-gray-800 text-center">${title}</h3>
-                    <p class="text-gray-500 mt-2">${games[title].length} Items</p>
+                    <p class="text-gray-500 text-sm mt-1">${games[title].length} Items</p>
                 </div>
             `).join('');
             
-            // Expose to window so onclick works in template string
-            window.showProductList = showProductList;
+            window.showProductList = showProductList; // Expose to HTML
         }
 
         function renderProductList(gameTitle) {
             const products = games[gameTitle] || [];
             productGrid.innerHTML = products.map(p => `
-                <div class="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                    <div class="p-4 flex-grow">
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="text-xs font-bold text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded">
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full hover:shadow-md transition">
+                    <div class="p-5 flex-grow">
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="text-[10px] font-bold tracking-wider text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded">
                                 ${p.product_type}
                             </span>
-                            ${p.rarity ? `<span class="text-xs font-semibold text-purple-600 border border-purple-200 px-2 py-1 rounded">${p.rarity}</span>` : ''}
+                            ${p.rarity ? `<span class="text-[10px] font-bold text-purple-600 border border-purple-200 px-2 py-1 rounded">${p.rarity}</span>` : ''}
                         </div>
 
-                        <h3 class="font-bold text-gray-800 text-lg mb-1">${p.card_name}</h3>
-                        ${p.set_name ? `<p class="text-sm text-gray-500 mb-2">${p.set_name}</p>` : ''}
-
-                        ${p.card_id ? `<p class="text-xs font-mono text-gray-400 mb-4">ID: ${p.card_id}</p>` : ''}
+                        <h3 class="font-bold text-gray-800 text-lg leading-tight mb-1">${p.card_name}</h3>
+                        ${p.set_name ? `<p class="text-xs text-gray-500 mb-3">${p.set_name}</p>` : ''}
+                        
+                        ${p.barcode ? `<p class="text-xs font-mono text-gray-400">#${p.barcode}</p>` : ''}
+                        ${p.card_id ? `<p class="text-xs font-mono text-gray-400">ID: ${p.card_id}</p>` : ''}
                     </div>
 
-                    <div class="p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+                    <div class="px-5 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
                         <span class="text-xl font-bold text-green-700">$${p.price}</span>
-                        <span class="text-sm font-semibold ${p.stock_quantity > 0 ? 'text-gray-700' : 'text-red-500'}">
-                            ${p.stock_quantity > 0 ? `${p.stock_quantity} in stock` : 'Out of Stock'}
-                        </span>
+                        <div class="text-right">
+                             <span class="block text-xs font-bold ${p.stock_quantity > 0 ? 'text-gray-700' : 'text-red-500'}">
+                                ${p.stock_quantity > 0 ? 'In Stock' : 'Sold Out'}
+                            </span>
+                            ${p.stock_quantity > 0 && p.stock_quantity < 5 ? `<span class="text-[10px] text-red-500 font-medium">Only ${p.stock_quantity} left!</span>` : ''}
+                        </div>
                     </div>
                 </div>
             `).join('');
+        }
+
+        // Helper for icons
+        function getGameIcon(title) {
+            if(title.includes('One Piece')) return '🏴‍☠️';
+            if(title.includes('Hololive')) return '🎤';
+            if(title.includes('Digimon')) return '👾';
+            return '🃏';
         }
     </script>
 </body>
