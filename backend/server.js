@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 
 // --- 2. ADVANCED CORS CONFIGURATION (Regex Fixed) ---
 const corsOptions = {
-  origin: 'https://yukino-hub.github.io', 
+  origin: ['https://yukino-hub.github.io', 'http://localhost:8000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
