@@ -10,7 +10,6 @@ const app = express();
 // --- 1. CONFIGURATION ---
 const PORT = process.env.PORT || 5000;
 
-// Advanced CORS (Regex Fixed for Node 22+)
 const corsOptions = {
   origin: 'https://yukino-hub.github.io', 
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -71,7 +70,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: user.role }, 
       process.env.JWT_SECRET || 'fallback_secret', 
-      { expiresIn: '8h' } // Increased to 8 hours for convenience
+      { expiresIn: '8h' } 
     );
 
     res.json({
@@ -113,7 +112,7 @@ app.post('/api/inventory/add', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         barcode || null, 
-        game_title || 'Hololive', // Reset default to Hololive
+        game_title || 'Hololive', 
         product_type || 'Single', 
         card_id || null, 
         card_name, 
@@ -206,7 +205,7 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-// ADMIN: View Registered Players (NEW ROUTE)
+// ADMIN: View Registered Players
 app.get('/api/events/:id/players', async (req, res) => {
   const eventId = req.params.id;
   try {
@@ -225,7 +224,7 @@ app.get('/api/events/:id/players', async (req, res) => {
   }
 });
 
-// PUBLIC: Join Event (Smart Registration)
+// PUBLIC: Join Event
 app.post('/api/events/join', async (req, res) => {
   const { event_id, player_name, contact_info } = req.body;
   
@@ -233,16 +232,14 @@ app.post('/api/events/join', async (req, res) => {
       return res.status(400).json({ error: "Name and Contact Info are required." });
   }
 
-  const connection = await db.getConnection(); // Transaction Start
+  const connection = await db.getConnection(); 
   try {
     await connection.beginTransaction();
 
-    // 1. Check Capacity
     const [rows] = await connection.execute('SELECT max_players, current_players FROM events WHERE id = ?', [event_id]);
     if (rows.length === 0) throw new Error('Event not found');
     if (rows[0].current_players >= rows[0].max_players) throw new Error('Event is full');
 
-    // 2. Find or Create Customer
     let customer_id;
     const [existingCustomer] = await connection.execute('SELECT id FROM customers WHERE contact_info = ?', [contact_info]);
 
@@ -253,10 +250,7 @@ app.post('/api/events/join', async (req, res) => {
       customer_id = newCust.insertId;
     }
 
-    // 3. Register Player
     await connection.execute('INSERT INTO event_registrations (event_id, customer_id) VALUES (?, ?)', [event_id, customer_id]);
-    
-    // 4. Update Event Count
     await connection.execute('UPDATE events SET current_players = current_players + 1 WHERE id = ?', [event_id]);
 
     await connection.commit();
@@ -273,6 +267,18 @@ app.post('/api/events/join', async (req, res) => {
     connection.release();
   }
 });
+
+// ==========================================
+// KEEP-ALIVE (Prevents Aiven from sleeping)
+// ==========================================
+setInterval(async () => {
+  try {
+    await db.execute('SELECT 1');
+    // console.log('⏰ Keep-alive ping successful'); // Uncomment to see in logs
+  } catch (error) {
+    console.error('⏰ Keep-alive ping failed:', error.message);
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
 
 // --- START SERVER ---
 app.listen(PORT, () => {
