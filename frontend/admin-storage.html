@@ -48,19 +48,13 @@
                     <label class="text-xs text-gray-500 block mb-1">Pack Type / Set</label>
                     <input type="text" id="pack-type" value="Standard Booster" class="w-full p-2 border rounded">
                 </div>
-                
                 <div>
                     <label class="text-xs text-gray-500 block mb-1">Quantity</label>
                     <input type="number" id="pack-qty" value="1" min="1" class="w-full p-2 border rounded font-bold text-center">
                 </div>
-
                 <div class="flex items-end gap-2">
-                    <button onclick="depositPacks()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow">
-                        + Deposit
-                    </button>
-                    <button onclick="withdrawPacks()" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded shadow">
-                        - Withdraw
-                    </button>
+                    <button onclick="depositPacks()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow">+ Deposit</button>
+                    <button onclick="withdrawPacks()" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded shadow">- Withdraw</button>
                 </div>
             </div>
         </div>
@@ -71,14 +65,36 @@
                 <thead class="bg-gray-50 border-b">
                     <tr>
                         <th class="p-4">Customer</th>
-                        <th class="p-4">Contact</th>
                         <th class="p-4">Game / Set</th>
                         <th class="p-4">Balance</th>
                         <th class="p-4">Last Updated</th>
+                        <th class="p-4">History</th>
                     </tr>
                 </thead>
                 <tbody id="storage-table"></tbody>
             </table>
+        </div>
+    </div>
+
+    <div id="history-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="bg-gray-800 px-6 py-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Transaction History</h3>
+                <button onclick="closeHistory()" class="text-2xl hover:text-gray-300">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <h4 id="history-cust-name" class="font-bold text-gray-700 mb-4 text-lg"></h4>
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-left text-gray-500 border-b">
+                            <th class="pb-2">Date</th>
+                            <th class="pb-2">Action</th>
+                            <th class="pb-2">Source / Event</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -90,40 +106,26 @@
             if (!token) window.location.href = 'admin.html';
             loadStorage();
             
-            // Customer Search Logic
             const searchInput = document.getElementById('cust-search');
             searchInput.addEventListener('input', async (e) => {
                 const q = e.target.value;
-                if (q.length < 2) return; 
-                
+                if (q.length < 2) return;
                 try {
                     const res = await fetch(`${API_URL}/customers/search?q=${q}`);
                     const customers = await res.json();
-                    
                     const resultsDiv = document.getElementById('cust-results');
-                    if(customers.length === 0) {
-                        resultsDiv.classList.add('hidden');
-                        return;
-                    }
-
                     resultsDiv.innerHTML = customers.map(c => `
                         <div class="p-2 hover:bg-blue-50 cursor-pointer border-b" 
                              onclick="selectCustomer(${c.id}, '${c.name}')">
-                            <span class="font-bold">${c.name}</span> 
-                            <span class="text-xs text-gray-500">(${c.contact_info})</span>
+                            <span class="font-bold">${c.name}</span> <span class="text-xs text-gray-500">(${c.contact_info})</span>
                         </div>
                     `).join('');
                     resultsDiv.classList.remove('hidden');
-                } catch(err) { console.error(err); }
+                } catch(err) {}
             });
-
-            // Close dropdown on outside click
             document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target)) {
-                    document.getElementById('cust-results').classList.add('hidden');
-                }
+                if (!searchInput.contains(e.target)) document.getElementById('cust-results').classList.add('hidden');
             });
-
             document.getElementById('logout-btn').addEventListener('click', () => {
                 localStorage.removeItem('k10_token');
                 window.location.href = 'admin.html';
@@ -135,7 +137,6 @@
             document.getElementById('cust-search').value = name;
             document.getElementById('cust-results').classList.add('hidden');
             
-            // NEW: Fetch Recent Events for this customer
             const eventSelect = document.getElementById('event-select');
             eventSelect.innerHTML = '<option>Loading history...</option>';
             eventSelect.disabled = true;
@@ -143,116 +144,94 @@
             try {
                 const res = await fetch(`${API_URL}/customers/${id}/recent-events`);
                 const events = await res.json();
-                
-                if(events.length === 0) {
-                    eventSelect.innerHTML = '<option value="">No recent events found</option>';
-                } else {
-                    eventSelect.innerHTML = '<option value="">-- Select Event Source --</option>' + 
-                        events.map(e => `
-                            <option value="${e.id}" data-game="${e.game_title}">
-                                ${e.title} (${new Date(e.event_date).toLocaleDateString()}) - ${e.game_title}
-                            </option>
-                        `).join('');
-                    eventSelect.disabled = false;
-                }
-            } catch(err) {
-                eventSelect.innerHTML = '<option>Error loading events</option>';
-            }
+                eventSelect.innerHTML = events.length ? 
+                    '<option value="">-- Select Event Source --</option>' + events.map(e => `<option value="${e.id}" data-game="${e.game_title}">${e.title} (${new Date(e.event_date).toLocaleDateString()})</option>`).join('') :
+                    '<option value="">No recent events found</option>';
+                eventSelect.disabled = false;
+            } catch(err) {}
         }
 
         async function depositPacks() {
             const custId = document.getElementById('selected-cust-id').value;
             const eventSelect = document.getElementById('event-select');
             const eventId = eventSelect.value;
-            
-            if (!custId) return alert("Please select a customer.");
-            if (!eventId) return alert("STRICT MODE: You must select the Event they played in.");
+            if (!custId) return alert("Select a customer.");
+            if (!eventId) return alert("Select the Event they played in.");
 
-            // Auto-detect game title from the selected event
-            const selectedOption = eventSelect.options[eventSelect.selectedIndex];
-            const gameTitle = selectedOption.getAttribute('data-game');
-            
+            const gameTitle = eventSelect.options[eventSelect.selectedIndex].getAttribute('data-game');
             const qty = parseInt(document.getElementById('pack-qty').value);
-
             await sendUpdate(custId, gameTitle, qty, eventId);
         }
 
         async function withdrawPacks() {
             const custId = document.getElementById('selected-cust-id').value;
-            if (!custId) return alert("Please select a customer.");
+            if (!custId) return alert("Select a customer.");
             
-            // Withdrawals don't strictly require an event ID (they are just picking up)
-            // But we need to know WHICH game they are picking up.
-            // For simplicity, we ask the user to pick the event logic or add a manual game selector.
-            // BETTER UX: Auto-select game based on the event list, or assume "One Piece" if manual.
-            
-            // Let's rely on the Event Select for Game Title even for withdrawal to keep it simple
             const eventSelect = document.getElementById('event-select');
-            let gameTitle = "One Piece"; // Default fallback
-            if(eventSelect.selectedIndex > 0) {
-                gameTitle = eventSelect.options[eventSelect.selectedIndex].getAttribute('data-game');
-            } else {
-                gameTitle = prompt("Which game packs are they withdrawing? (One Piece, Hololive, etc.)", "One Piece");
+            let gameTitle = "One Piece";
+            if(eventSelect.selectedIndex > 0) gameTitle = eventSelect.options[eventSelect.selectedIndex].getAttribute('data-game');
+            else {
+                gameTitle = prompt("Which game? (One Piece, Hololive, etc.)", "One Piece");
                 if(!gameTitle) return;
             }
-
             const qty = parseInt(document.getElementById('pack-qty').value);
             await sendUpdate(custId, gameTitle, -qty, null);
         }
 
         async function sendUpdate(custId, gameTitle, amount, eventId) {
             const packType = document.getElementById('pack-type').value || 'Standard Booster';
-            
-            const data = {
-                customer_id: custId,
-                game_title: gameTitle,
-                pack_type: packType,
-                change_amount: amount,
-                event_id: eventId // Sent for verification
-            };
-
             try {
                 const res = await fetch(`${API_URL}/storage/update`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({ customer_id: custId, game_title: gameTitle, pack_type: packType, change_amount: amount, event_id: eventId })
                 });
-
-                if (res.ok) {
-                    alert(amount > 0 ? "Deposit Successful!" : "Withdrawal Successful!");
-                    loadStorage();
-                } else {
-                    const err = await res.json();
-                    alert("Error: " + err.error);
-                }
+                if (res.ok) { alert("Updated!"); loadStorage(); }
+                else { const err = await res.json(); alert("Error: " + err.error); }
             } catch (err) { alert("Connection Failed"); }
         }
 
         async function loadStorage() {
-            try {
-                const res = await fetch(`${API_URL}/storage`);
-                const rows = await res.json();
-                
-                const tbody = document.getElementById('storage-table');
-                if (rows.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500">No packs in storage.</td></tr>`;
-                    return;
-                }
-
-                tbody.innerHTML = rows.map(r => `
-                    <tr class="border-b hover:bg-gray-50">
-                        <td class="p-4 font-bold text-gray-800">${r.name}</td>
-                        <td class="p-4 text-sm text-gray-500">${r.contact_info}</td>
-                        <td class="p-4">
-                            <span class="text-xs font-bold text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded">${r.game_title}</span>
-                            <span class="text-sm ml-2">${r.pack_type}</span>
-                        </td>
-                        <td class="p-4 font-bold text-xl text-green-700">${r.quantity}</td>
-                        <td class="p-4 text-xs text-gray-400">${new Date(r.last_updated).toLocaleDateString()}</td>
-                    </tr>
-                `).join('');
-            } catch(err) { console.error(err); }
+            const res = await fetch(`${API_URL}/storage`);
+            const rows = await res.json();
+            document.getElementById('storage-table').innerHTML = rows.map(r => `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="p-4 font-bold text-gray-800">${r.name}</td>
+                    <td class="p-4">
+                        <span class="text-xs font-bold text-blue-600 uppercase bg-blue-50 px-2 py-1 rounded">${r.game_title}</span>
+                        <span class="text-sm ml-2">${r.pack_type}</span>
+                    </td>
+                    <td class="p-4 font-bold text-xl text-green-700">${r.quantity}</td>
+                    <td class="p-4 text-xs text-gray-400">${new Date(r.last_updated).toLocaleDateString()}</td>
+                    <td class="p-4">
+                        <button onclick="viewHistory(${r.customer_id}, '${r.name}')" class="text-sm text-blue-600 hover:underline">View Log</button>
+                    </td>
+                </tr>
+            `).join('');
         }
+
+        async function viewHistory(custId, name) {
+            document.getElementById('history-cust-name').innerText = name + "'s History";
+            document.getElementById('history-modal').classList.remove('hidden');
+            const tbody = document.getElementById('history-body');
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4">Loading...</td></tr>';
+            
+            const res = await fetch(`${API_URL}/storage/history/${custId}`);
+            const logs = await res.json();
+            
+            tbody.innerHTML = logs.map(l => `
+                <tr class="border-b">
+                    <td class="py-2 text-gray-500 text-xs">${new Date(l.transaction_date).toLocaleDateString()} ${new Date(l.transaction_date).toLocaleTimeString()}</td>
+                    <td class="py-2 font-bold ${l.amount > 0 ? 'text-green-600' : 'text-red-500'}">
+                        ${l.amount > 0 ? '+' : ''}${l.amount} Packs
+                    </td>
+                    <td class="py-2 text-sm text-gray-600">
+                        ${l.event_name ? `🏆 ${l.event_name}` : 'Pickup / Withdrawal'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        function closeHistory() { document.getElementById('history-modal').classList.add('hidden'); }
     </script>
 </body>
 </html>
