@@ -374,16 +374,15 @@ app.get('/api/customers/:id/recent-events', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch history' });
     }
 });
-
 // ==========================================
-// PACK STORAGE SYSTEM (Strict Security)
+// PACK STORAGE SYSTEM (With Audit Log)
 // ==========================================
 
-// See all stored packs
+// 1. GET: See all stored packs (Current Balances)
 app.get('/api/storage', async (req, res) => {
   try {
     const [rows] = await db.execute(`
-      SELECT p.id, c.name, c.contact_info, p.game_title, p.pack_type, p.quantity, p.last_updated
+      SELECT p.id, c.id as customer_id, c.name, c.contact_info, p.game_title, p.pack_type, p.quantity, p.last_updated
       FROM customer_packs p
       JOIN customers c ON p.customer_id = c.id
       WHERE p.quantity > 0
@@ -395,30 +394,44 @@ app.get('/api/storage', async (req, res) => {
   }
 });
 
-// Deposit Packs (STRICT MODE: Requires Event Verification)
+// 2. GET: See Transaction History for a Customer (Bank Statement)
+app.get('/api/storage/history/:customerId', async (req, res) => {
+    const custId = req.params.customerId;
+    try {
+        const [history] = await db.execute(`
+            SELECT t.transaction_date, t.game_title, t.pack_type, t.amount, e.title as event_name
+            FROM pack_transactions t
+            LEFT JOIN events e ON t.event_id = e.id
+            WHERE t.customer_id = ?
+            ORDER BY t.transaction_date DESC
+        `, [custId]);
+        res.json(history);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch history' });
+    }
+});
+
+// 3. POST: Deposit/Withdraw (Now Logs History!)
 app.post('/api/storage/update', async (req, res) => {
   const { customer_id, game_title, pack_type, change_amount, event_id } = req.body;
-
+  
+  const connection = await db.getConnection();
   try {
-    // --- SECURITY CHECK (Only for Deposits) ---
-    if (change_amount > 0) {
-        if (!event_id) {
-            return res.status(400).json({ error: "You must select the Event this customer played in." });
-        }
+    await connection.beginTransaction();
 
-        // Verify they actually registered for this specific event
-        const [registration] = await db.execute(
+    // A. Security Check (Same as before)
+    if (change_amount > 0) {
+        if (!event_id) throw new Error("You must select the Event this customer played in.");
+        
+        const [registration] = await connection.execute(
             `SELECT id FROM event_registrations WHERE customer_id = ? AND event_id = ?`,
             [customer_id, event_id]
         );
-
-        if (registration.length === 0) {
-            return res.status(403).json({ error: "Security Alert: This customer did NOT join that event." });
-        }
+        if (registration.length === 0) throw new Error("Security Alert: Customer did NOT join that event.");
     }
-    // ------------------------------------------
 
-    const [existing] = await db.execute(
+    // B. Update Balance (Customer Packs Table)
+    const [existing] = await connection.execute(
       `SELECT id, quantity FROM customer_packs 
        WHERE customer_id = ? AND game_title = ? AND pack_type = ?`,
       [customer_id, game_title, pack_type || 'Standard Booster']
@@ -426,22 +439,32 @@ app.post('/api/storage/update', async (req, res) => {
 
     if (existing.length > 0) {
       const newQuantity = existing[0].quantity + parseInt(change_amount);
-      if (newQuantity < 0) return res.status(400).json({ error: "Not enough packs to withdraw." });
-
-      await db.execute('UPDATE customer_packs SET quantity = ? WHERE id = ?', [newQuantity, existing[0].id]);
+      if (newQuantity < 0) throw new Error("Not enough packs to withdraw.");
+      await connection.execute('UPDATE customer_packs SET quantity = ? WHERE id = ?', [newQuantity, existing[0].id]);
     } else {
-      if (change_amount < 0) return res.status(400).json({ error: "No packs found to withdraw." });
-      
-      await db.execute(
+      if (change_amount < 0) throw new Error("No packs found to withdraw.");
+      await connection.execute(
         `INSERT INTO customer_packs (customer_id, game_title, pack_type, quantity) VALUES (?, ?, ?, ?)`,
         [customer_id, game_title, pack_type || 'Standard Booster', change_amount]
       );
     }
 
-    res.json({ message: 'Storage updated successfully!' });
+    // C. CREATE AUDIT LOG (New Step!)
+    await connection.execute(
+        `INSERT INTO pack_transactions (customer_id, game_title, pack_type, amount, event_id) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [customer_id, game_title, pack_type || 'Standard Booster', change_amount, event_id || null]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Storage updated & Logged!' });
+
   } catch (error) {
-    console.error("Update Error:", error);
-    res.status(500).json({ error: 'Failed to update storage.' });
+    await connection.rollback();
+    console.error(error);
+    res.status(500).json({ error: error.message || 'Update failed' });
+  } finally {
+    connection.release();
   }
 });
 
