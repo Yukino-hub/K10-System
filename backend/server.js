@@ -174,7 +174,7 @@ app.delete('/api/inventory/:id', async (req, res) => {
 });
 
 // ==========================================
-// EVENT SYSTEM
+// EVENT SYSTEM (Updated with Payment Tracking)
 // ==========================================
 
 // Create Event
@@ -193,28 +193,37 @@ app.post('/api/events/create', async (req, res) => {
   }
 });
 
-// Get Upcoming Events
+// Get Events (With History Support)
 app.get('/api/events', async (req, res) => {
+  const { admin } = req.query; 
+
   try {
-    const [events] = await db.execute(
-      `SELECT * FROM events WHERE event_date >= NOW() ORDER BY event_date ASC`
-    );
+    let query = `SELECT * FROM events`;
+    
+    // Only show future events unless admin requests all
+    if (admin !== 'true') {
+        query += ` WHERE event_date >= NOW()`;
+    }
+    
+    query += ` ORDER BY event_date DESC`; // Show newest first
+
+    const [events] = await db.execute(query);
     res.json(events);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch events' });
   }
 });
 
-// View Registered Players
+// View Registered Players (Includes Payment Status)
 app.get('/api/events/:id/players', async (req, res) => {
   const eventId = req.params.id;
   try {
     const [players] = await db.execute(
-      `SELECT c.name, c.contact_info, r.registered_at 
+      `SELECT r.id as registration_id, c.name, c.contact_info, r.registered_at, r.has_paid 
        FROM event_registrations r
        JOIN customers c ON r.customer_id = c.id
        WHERE r.event_id = ?
-       ORDER BY r.registered_at DESC`,
+       ORDER BY r.has_paid ASC, r.registered_at DESC`, 
       [eventId]
     );
     res.json(players);
@@ -224,9 +233,9 @@ app.get('/api/events/:id/players', async (req, res) => {
   }
 });
 
-// Join Event
+// Join Event (Handles Payment Status + Transactions)
 app.post('/api/events/join', async (req, res) => {
-  const { event_id, player_name, contact_info } = req.body;
+  const { event_id, player_name, contact_info, has_paid } = req.body;
   
   if (!player_name || !contact_info) {
       return res.status(400).json({ error: "Name and Contact Info are required." });
@@ -236,10 +245,12 @@ app.post('/api/events/join', async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // 1. Check Capacity
     const [rows] = await connection.execute('SELECT max_players, current_players FROM events WHERE id = ?', [event_id]);
     if (rows.length === 0) throw new Error('Event not found');
     if (rows[0].current_players >= rows[0].max_players) throw new Error('Event is full');
 
+    // 2. Find or Create Customer
     let customer_id;
     const [existingCustomer] = await connection.execute('SELECT id FROM customers WHERE contact_info = ?', [contact_info]);
 
@@ -250,7 +261,13 @@ app.post('/api/events/join', async (req, res) => {
       customer_id = newCust.insertId;
     }
 
-    await connection.execute('INSERT INTO event_registrations (event_id, customer_id) VALUES (?, ?)', [event_id, customer_id]);
+    // 3. Register Player
+    await connection.execute(
+        'INSERT INTO event_registrations (event_id, customer_id, has_paid) VALUES (?, ?, ?)', 
+        [event_id, customer_id, has_paid || false]
+    );
+    
+    // 4. Update Event Count
     await connection.execute('UPDATE events SET current_players = current_players + 1 WHERE id = ?', [event_id]);
 
     await connection.commit();
@@ -266,6 +283,17 @@ app.post('/api/events/join', async (req, res) => {
   } finally {
     connection.release();
   }
+});
+
+// Toggle Payment Status
+app.put('/api/events/registration/:id/toggle-pay', async (req, res) => {
+    const regId = req.params.id;
+    try {
+        await db.execute('UPDATE event_registrations SET has_paid = NOT has_paid WHERE id = ?', [regId]);
+        res.json({ message: 'Payment status updated' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update payment' });
+    }
 });
 
 // ==========================================
@@ -315,11 +343,43 @@ app.post('/api/customers/create', async (req, res) => {
     }
 });
 
+// Search Customer (Helper)
+app.get('/api/customers/search', async (req, res) => {
+    const { q } = req.query;
+    try {
+        const [rows] = await db.execute(
+            `SELECT id, name, contact_info FROM customers WHERE name LIKE ? LIMIT 5`, 
+            [`%${q}%`]
+        );
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// Fetch Recent Events for Customer (Helper)
+app.get('/api/customers/:id/recent-events', async (req, res) => {
+    const custId = req.params.id;
+    try {
+        const [events] = await db.execute(`
+            SELECT e.id, e.title, e.game_title, e.event_date 
+            FROM event_registrations r
+            JOIN events e ON r.event_id = e.id
+            WHERE r.customer_id = ?
+            ORDER BY e.event_date DESC
+            LIMIT 5
+        `, [custId]);
+        res.json(events);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch history' });
+    }
+});
+
 // ==========================================
 // PACK STORAGE SYSTEM (Strict Security)
 // ==========================================
 
-// 1. GET: See all stored packs
+// See all stored packs
 app.get('/api/storage', async (req, res) => {
   try {
     const [rows] = await db.execute(`
@@ -335,7 +395,7 @@ app.get('/api/storage', async (req, res) => {
   }
 });
 
-// 2. POST: Deposit Packs (STRICT MODE)
+// Deposit Packs (STRICT MODE: Requires Event Verification)
 app.post('/api/storage/update', async (req, res) => {
   const { customer_id, game_title, pack_type, change_amount, event_id } = req.body;
 
@@ -358,7 +418,6 @@ app.post('/api/storage/update', async (req, res) => {
     }
     // ------------------------------------------
 
-    // Check if storage row exists
     const [existing] = await db.execute(
       `SELECT id, quantity FROM customer_packs 
        WHERE customer_id = ? AND game_title = ? AND pack_type = ?`,
@@ -366,13 +425,11 @@ app.post('/api/storage/update', async (req, res) => {
     );
 
     if (existing.length > 0) {
-      // UPDATE existing record
       const newQuantity = existing[0].quantity + parseInt(change_amount);
       if (newQuantity < 0) return res.status(400).json({ error: "Not enough packs to withdraw." });
 
       await db.execute('UPDATE customer_packs SET quantity = ? WHERE id = ?', [newQuantity, existing[0].id]);
     } else {
-      // INSERT new record (only if adding)
       if (change_amount < 0) return res.status(400).json({ error: "No packs found to withdraw." });
       
       await db.execute(
@@ -388,18 +445,19 @@ app.post('/api/storage/update', async (req, res) => {
   }
 });
 
-// 3. GET: Search Customer (Helper)
-app.get('/api/customers/search', async (req, res) => {
-    const { q } = req.query;
-    try {
-        const [rows] = await db.execute(
-            `SELECT id, name, contact_info FROM customers WHERE name LIKE ? LIMIT 5`, 
-            [`%${q}%`]
-        );
-        res.json(rows);
-    } catch (error) {
-        res.status(500).json({ error: 'Search failed' });
-    }
-});
+// ==========================================
+// KEEP-ALIVE (Prevents Aiven from sleeping)
+// ==========================================
+setInterval(async () => {
+  try {
+    await db.execute('SELECT 1');
+    // console.log('⏰ Keep-alive ping successful'); 
+  } catch (error) {
+    console.error('⏰ Keep-alive ping failed:', error.message);
+  }
+}, 5 * 60 * 1000); 
 
-// 4. GET: Fetch Recent Events for Customer (New Helper
+// --- START SERVER ---
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
