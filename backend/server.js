@@ -269,6 +269,53 @@ app.post('/api/events/join', async (req, res) => {
 });
 
 // ==========================================
+// CUSTOMER CRM SYSTEM
+// ==========================================
+
+// 1. GET: List all customers
+app.get('/api/customers', async (req, res) => {
+    const { search } = req.query;
+    try {
+        let query = 'SELECT * FROM customers';
+        let params = [];
+
+        if (search) {
+            query += ' WHERE name LIKE ? OR contact_info LIKE ?';
+            params = [`%${search}%`, `%${search}%`];
+        }
+
+        query += ' ORDER BY created_at DESC';
+        const [customers] = await db.execute(query, params);
+        res.json(customers);
+    } catch (error) {
+        console.error("Fetch Customers Error:", error);
+        res.status(500).json({ error: 'Failed to fetch customers' });
+    }
+});
+
+// 2. POST: Manual Registration (Admin)
+app.post('/api/customers/create', async (req, res) => {
+    const { name, contact_info } = req.body;
+    
+    if (!name || !contact_info) {
+        return res.status(400).json({ error: "Name and Contact Info are required." });
+    }
+
+    try {
+        const [result] = await db.execute(
+            'INSERT INTO customers (name, contact_info) VALUES (?, ?)',
+            [name, contact_info]
+        );
+        res.status(201).json({ message: 'Customer profile created!', id: result.insertId });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: 'A customer with this phone/email already exists.' });
+        }
+        res.status(500).json({ error: 'Failed to register customer.' });
+    }
+});
+
+// ==========================================
 // KEEP-ALIVE (Prevents Aiven from sleeping)
 // ==========================================
 setInterval(async () => {
