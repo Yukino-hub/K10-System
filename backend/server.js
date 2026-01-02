@@ -316,6 +316,73 @@ app.post('/api/customers/create', async (req, res) => {
 });
 
 // ==========================================
+// PACK STORAGE SYSTEM
+// ==========================================
+
+// 1. GET: See all stored packs
+app.get('/api/storage', async (req, res) => {
+  try {
+    const [rows] = await db.execute(`
+      SELECT p.id, c.name, c.contact_info, p.game_title, p.pack_type, p.quantity, p.last_updated
+      FROM customer_packs p
+      JOIN customers c ON p.customer_id = c.id
+      WHERE p.quantity > 0
+      ORDER BY p.last_updated DESC
+    `);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch storage.' });
+  }
+});
+
+// 2. POST: Deposit or Withdraw Packs
+app.post('/api/storage/update', async (req, res) => {
+  const { customer_id, game_title, pack_type, change_amount } = req.body;
+
+  try {
+    // Check if row exists
+    const [existing] = await db.execute(
+      `SELECT id, quantity FROM customer_packs 
+       WHERE customer_id = ? AND game_title = ? AND pack_type = ?`,
+      [customer_id, game_title, pack_type]
+    );
+
+    if (existing.length > 0) {
+      // UPDATE existing record
+      const newQuantity = existing[0].quantity + parseInt(change_amount);
+      if (newQuantity < 0) return res.status(400).json({ error: "Not enough packs in storage!" });
+
+      await db.execute('UPDATE customer_packs SET quantity = ? WHERE id = ?', [newQuantity, existing[0].id]);
+    } else {
+      // INSERT new record (only if adding)
+      if (change_amount < 0) return res.status(400).json({ error: "No packs found to withdraw." });
+      
+      await db.execute(
+        `INSERT INTO customer_packs (customer_id, game_title, pack_type, quantity) VALUES (?, ?, ?, ?)`,
+        [customer_id, game_title, pack_type, change_amount]
+      );
+    }
+    res.json({ message: 'Storage updated successfully!' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update storage.' });
+  }
+});
+
+// 3. GET: Search Customer for Dropdown
+app.get('/api/customers/search', async (req, res) => {
+    const { q } = req.query;
+    try {
+        const [rows] = await db.execute(
+            `SELECT id, name, contact_info FROM customers WHERE name LIKE ? LIMIT 5`, 
+            [`%${q}%`]
+        );
+        res.json(rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// ==========================================
 // KEEP-ALIVE (Prevents Aiven from sleeping)
 // ==========================================
 setInterval(async () => {
