@@ -28,6 +28,20 @@ app.get('/', (req, res) => {
   res.send('K10 System Backend is Online and Connected to Aiven Cloud MySQL!');
 });
 
+// --- MIDDLEWARE ---
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return res.status(401).json({ error: 'Access denied' });
+
+  jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+};
+
 // ==========================================
 // AUTH SYSTEM (Staff)
 // ==========================================
@@ -172,6 +186,150 @@ app.delete('/api/inventory/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete product' });
   }
 });
+
+// ==========================================
+// CUSTOMER & STORAGE SYSTEM
+// ==========================================
+
+// Get All Customers (with basic storage info optional)
+app.get('/api/customers', authenticateToken, async (req, res) => {
+  try {
+    const [customers] = await db.execute(`
+      SELECT id, name, contact_info, is_member, created_at
+      FROM customers
+      ORDER BY name ASC
+    `);
+    res.json(customers);
+  } catch (error) {
+    console.error("Fetch Customers Error:", error);
+    res.status(500).json({ error: 'Failed to fetch customers' });
+  }
+});
+
+// Toggle Membership
+app.put('/api/customers/:id/membership', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { is_member } = req.body; // Expect boolean
+
+  try {
+    await db.execute('UPDATE customers SET is_member = ? WHERE id = ?', [is_member, id]);
+    res.json({ message: 'Membership status updated' });
+  } catch (error) {
+    console.error("Update Membership Error:", error);
+    res.status(500).json({ error: 'Failed to update membership' });
+  }
+});
+
+// Get Customer Details (Events + Storage)
+app.get('/api/customers/:id/details', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // 1. Get Event History
+    const [events] = await db.execute(`
+      SELECT e.title, e.game_title, e.event_date, r.registered_at
+      FROM event_registrations r
+      JOIN events e ON r.event_id = e.id
+      WHERE r.customer_id = ?
+      ORDER BY e.event_date DESC
+    `, [id]);
+
+    // 2. Get Storage Summary
+    const [storage] = await db.execute(`
+      SELECT game_title, quantity
+      FROM customer_storage
+      WHERE customer_id = ?
+    `, [id]);
+
+    res.json({ events, storage });
+  } catch (error) {
+    console.error("Fetch Details Error:", error);
+    res.status(500).json({ error: 'Failed to fetch customer details' });
+  }
+});
+
+// Storage Transaction (Add/Remove)
+app.post('/api/storage/transaction', authenticateToken, async (req, res) => {
+  const { customer_id, game_title, quantity, action } = req.body;
+  // action: 'add' or 'remove'
+  // quantity: positive integer
+  const staff_id = req.user.id;
+
+  if (!customer_id || !game_title || !quantity || !action) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const change_amount = action === 'add' ? parseInt(quantity) : -parseInt(quantity);
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Update Storage
+    // Check if entry exists
+    const [rows] = await connection.execute(
+      'SELECT quantity FROM customer_storage WHERE customer_id = ? AND game_title = ?',
+      [customer_id, game_title]
+    );
+
+    let currentQty = 0;
+    if (rows.length > 0) {
+      currentQty = rows[0].quantity;
+      const newQty = currentQty + change_amount;
+      if (newQty < 0) {
+        throw new Error('Insufficient storage quantity');
+      }
+      await connection.execute(
+        'UPDATE customer_storage SET quantity = ? WHERE customer_id = ? AND game_title = ?',
+        [newQty, customer_id, game_title]
+      );
+    } else {
+      if (change_amount < 0) {
+        throw new Error('Insufficient storage quantity (No record found)');
+      }
+      await connection.execute(
+        'INSERT INTO customer_storage (customer_id, game_title, quantity) VALUES (?, ?, ?)',
+        [customer_id, game_title, change_amount]
+      );
+    }
+
+    // 2. Log Transaction
+    await connection.execute(
+      `INSERT INTO storage_logs (customer_id, staff_id, game_title, change_amount, action_type)
+       VALUES (?, ?, ?, ?, ?)`,
+      [customer_id, staff_id, game_title, change_amount, action]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Storage updated successfully' });
+
+  } catch (error) {
+    await connection.rollback();
+    console.error("Storage Transaction Error:", error.message);
+    res.status(400).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// Get Storage Logs
+app.get('/api/storage/logs/:customer_id', authenticateToken, async (req, res) => {
+  const { customer_id } = req.params;
+  try {
+    const [logs] = await db.execute(`
+      SELECT l.*, s.username as staff_name
+      FROM storage_logs l
+      LEFT JOIN staff s ON l.staff_id = s.id
+      WHERE l.customer_id = ?
+      ORDER BY l.created_at DESC
+    `, [customer_id]);
+    res.json(logs);
+  } catch (error) {
+    console.error("Fetch Logs Error:", error);
+    res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
 
 // ==========================================
 // EVENT SYSTEM
