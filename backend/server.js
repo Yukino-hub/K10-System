@@ -394,12 +394,13 @@ app.get('/api/storage', async (req, res) => {
   }
 });
 
-// 2. GET: See Transaction History for a Customer (Bank Statement)
+// 2. GET: See Transaction History (Updated with Event Date)
 app.get('/api/storage/history/:customerId', async (req, res) => {
     const custId = req.params.customerId;
     try {
         const [history] = await db.execute(`
-            SELECT t.transaction_date, t.game_title, t.pack_type, t.amount, e.title as event_name
+            SELECT t.transaction_date, t.game_title, t.pack_type, t.amount, 
+                   e.title as event_name, e.event_date 
             FROM pack_transactions t
             LEFT JOIN events e ON t.event_id = e.id
             WHERE t.customer_id = ?
