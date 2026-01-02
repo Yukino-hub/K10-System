@@ -26,41 +26,42 @@
         <div class="bg-white p-6 rounded-lg shadow-sm mb-8 border-l-4 border-yellow-500">
             <h2 class="text-xl font-bold text-gray-800 mb-4">Manage Customer Packs</h2>
             
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="md:col-span-2 relative">
-                    <label class="text-xs text-gray-500 block mb-1">Customer Name</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="relative">
+                    <label class="text-xs text-gray-500 block mb-1 font-bold">STEP 1: Find Customer</label>
                     <input type="text" id="cust-search" placeholder="Type name to search..." class="w-full p-2 border rounded" autocomplete="off">
                     <div id="cust-results" class="absolute z-10 w-full bg-white shadow-lg border rounded mt-1 hidden max-h-40 overflow-y-auto"></div>
                     <input type="hidden" id="selected-cust-id">
                 </div>
 
                 <div>
-                    <label class="text-xs text-gray-500 block mb-1">Game</label>
-                    <select id="game-select" class="w-full p-2 border rounded bg-gray-50">
-                        <option value="One Piece">One Piece</option>
-                        <option value="Hololive">Hololive</option>
-                        <option value="Digimon">Digimon</option>
-                        <option value="Other">Other</option>
+                    <label class="text-xs text-gray-500 block mb-1 font-bold">STEP 2: Select Event Source</label>
+                    <select id="event-select" class="w-full p-2 border rounded bg-gray-50 text-gray-600" disabled>
+                        <option value="">(Select a customer first)</option>
                     </select>
+                    <p class="text-xs text-gray-400 mt-1">* Only events they joined appear here.</p>
                 </div>
+            </div>
 
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
                 <div>
                     <label class="text-xs text-gray-500 block mb-1">Pack Type / Set</label>
                     <input type="text" id="pack-type" value="Standard Booster" class="w-full p-2 border rounded">
                 </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 items-end">
+                
                 <div>
                     <label class="text-xs text-gray-500 block mb-1">Quantity</label>
                     <input type="number" id="pack-qty" value="1" min="1" class="w-full p-2 border rounded font-bold text-center">
                 </div>
-                <button onclick="updateStorage(1)" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow">
-                    + Deposit
-                </button>
-                <button onclick="updateStorage(-1)" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow">
-                    - Withdraw (Pickup)
-                </button>
+
+                <div class="flex items-end gap-2">
+                    <button onclick="depositPacks()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded shadow">
+                        + Deposit
+                    </button>
+                    <button onclick="withdrawPacks()" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded shadow">
+                        - Withdraw
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -83,18 +84,17 @@
 
     <script>
         const API_URL = 'https://k10-system.onrender.com/api';
-        
+        let token = localStorage.getItem('k10_token');
+
         document.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('k10_token');
             if (!token) window.location.href = 'admin.html';
-            
             loadStorage();
             
             // Customer Search Logic
             const searchInput = document.getElementById('cust-search');
             searchInput.addEventListener('input', async (e) => {
                 const q = e.target.value;
-                if (q.length < 2) return; // Wait for 2 chars
+                if (q.length < 2) return; 
                 
                 try {
                     const res = await fetch(`${API_URL}/customers/search?q=${q}`);
@@ -117,7 +117,7 @@
                 } catch(err) { console.error(err); }
             });
 
-            // Close search dropdown when clicking outside
+            // Close dropdown on outside click
             document.addEventListener('click', (e) => {
                 if (!searchInput.contains(e.target)) {
                     document.getElementById('cust-results').classList.add('hidden');
@@ -130,25 +130,85 @@
             });
         });
 
-        function selectCustomer(id, name) {
+        async function selectCustomer(id, name) {
             document.getElementById('selected-cust-id').value = id;
             document.getElementById('cust-search').value = name;
             document.getElementById('cust-results').classList.add('hidden');
+            
+            // NEW: Fetch Recent Events for this customer
+            const eventSelect = document.getElementById('event-select');
+            eventSelect.innerHTML = '<option>Loading history...</option>';
+            eventSelect.disabled = true;
+
+            try {
+                const res = await fetch(`${API_URL}/customers/${id}/recent-events`);
+                const events = await res.json();
+                
+                if(events.length === 0) {
+                    eventSelect.innerHTML = '<option value="">No recent events found</option>';
+                } else {
+                    eventSelect.innerHTML = '<option value="">-- Select Event Source --</option>' + 
+                        events.map(e => `
+                            <option value="${e.id}" data-game="${e.game_title}">
+                                ${e.title} (${new Date(e.event_date).toLocaleDateString()}) - ${e.game_title}
+                            </option>
+                        `).join('');
+                    eventSelect.disabled = false;
+                }
+            } catch(err) {
+                eventSelect.innerHTML = '<option>Error loading events</option>';
+            }
         }
 
-        async function updateStorage(multiplier) {
+        async function depositPacks() {
             const custId = document.getElementById('selected-cust-id').value;
-            if (!custId) return alert("Please search and select a customer first!");
+            const eventSelect = document.getElementById('event-select');
+            const eventId = eventSelect.value;
+            
+            if (!custId) return alert("Please select a customer.");
+            if (!eventId) return alert("STRICT MODE: You must select the Event they played in.");
+
+            // Auto-detect game title from the selected event
+            const selectedOption = eventSelect.options[eventSelect.selectedIndex];
+            const gameTitle = selectedOption.getAttribute('data-game');
+            
+            const qty = parseInt(document.getElementById('pack-qty').value);
+
+            await sendUpdate(custId, gameTitle, qty, eventId);
+        }
+
+        async function withdrawPacks() {
+            const custId = document.getElementById('selected-cust-id').value;
+            if (!custId) return alert("Please select a customer.");
+            
+            // Withdrawals don't strictly require an event ID (they are just picking up)
+            // But we need to know WHICH game they are picking up.
+            // For simplicity, we ask the user to pick the event logic or add a manual game selector.
+            // BETTER UX: Auto-select game based on the event list, or assume "One Piece" if manual.
+            
+            // Let's rely on the Event Select for Game Title even for withdrawal to keep it simple
+            const eventSelect = document.getElementById('event-select');
+            let gameTitle = "One Piece"; // Default fallback
+            if(eventSelect.selectedIndex > 0) {
+                gameTitle = eventSelect.options[eventSelect.selectedIndex].getAttribute('data-game');
+            } else {
+                gameTitle = prompt("Which game packs are they withdrawing? (One Piece, Hololive, etc.)", "One Piece");
+                if(!gameTitle) return;
+            }
 
             const qty = parseInt(document.getElementById('pack-qty').value);
-            const amount = qty * multiplier;
-            const packType = document.getElementById('pack-type').value || 'Standard Booster';
+            await sendUpdate(custId, gameTitle, -qty, null);
+        }
 
+        async function sendUpdate(custId, gameTitle, amount, eventId) {
+            const packType = document.getElementById('pack-type').value || 'Standard Booster';
+            
             const data = {
                 customer_id: custId,
-                game_title: document.getElementById('game-select').value,
+                game_title: gameTitle,
                 pack_type: packType,
-                change_amount: amount
+                change_amount: amount,
+                event_id: eventId // Sent for verification
             };
 
             try {
@@ -159,7 +219,7 @@
                 });
 
                 if (res.ok) {
-                    alert("Storage Updated Successfully!");
+                    alert(amount > 0 ? "Deposit Successful!" : "Withdrawal Successful!");
                     loadStorage();
                 } else {
                     const err = await res.json();
