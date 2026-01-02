@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K10 Admin - Pack Storage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <nav class="bg-white shadow-sm mb-8">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-gray-800">K10 Manager Portal</h1>
+            <div class="space-x-4">
+                <a href="admin.html" class="text-gray-600 hover:text-blue-600 font-medium">Inventory</a>
+                <a href="admin-event.html" class="text-gray-600 hover:text-blue-600 font-medium">Events</a>
+                <a href="admin-customers.html" class="text-gray-600 hover:text-blue-600 font-medium">Customers</a>
+                <a href="admin-storage.html" class="text-blue-600 font-bold border-b-2 border-blue-600 pb-1">Pack Storage</a>
+                <button id="logout-btn" class="text-red-600 font-semibold ml-4">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 pb-12">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+            <!-- LEFT COLUMN: SEARCH & SELECT CUSTOMER -->
+            <div class="md:col-span-1 space-y-6">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-lg font-bold mb-4 text-gray-700">1. Select Customer</h2>
+                    <input type="text" id="customer-search" placeholder="Search Name or Contact..." class="w-full p-2 border rounded mb-2">
+                    <div id="customer-list" class="max-h-64 overflow-y-auto border rounded bg-gray-50 divide-y">
+                        <!-- Populated by JS -->
+                        <p class="p-4 text-sm text-gray-500 text-center">Type to search...</p>
+                    </div>
+                </div>
+
+                <div id="selected-customer-card" class="bg-blue-50 p-6 rounded-lg border border-blue-200 hidden">
+                    <h3 class="text-sm font-bold text-blue-800 uppercase tracking-wide">Selected Customer</h3>
+                    <p id="sel-name" class="text-xl font-bold text-gray-900 mt-1">Name</p>
+                    <p id="sel-contact" class="text-sm text-gray-600 mb-2">Contact</p>
+                    <div id="sel-member-badge" class="inline-block px-2 py-1 rounded bg-gray-200 text-xs font-bold">Standard</div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: MANAGE STORAGE & LOGS -->
+            <div class="md:col-span-2 space-y-6">
+
+                <!-- CURRENT STORAGE & ACTIONS -->
+                <div id="storage-panel" class="bg-white p-6 rounded-lg shadow-sm opacity-50 pointer-events-none transition-opacity">
+                    <div class="flex justify-between items-start mb-6 border-b pb-4">
+                        <h2 class="text-xl font-bold text-gray-800">2. Manage Storage</h2>
+                    </div>
+
+                    <!-- Current Balance Grid -->
+                    <div id="current-storage-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+                        <!-- Loaded dynamically -->
+                    </div>
+
+                    <!-- Action Form -->
+                    <div class="bg-gray-50 p-4 rounded border">
+                        <h3 class="text-sm font-bold text-gray-700 mb-3">Update Balance</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <select id="game-select" class="p-2 border rounded">
+                                <option value="Hololive">Hololive</option>
+                                <option value="One Piece">One Piece</option>
+                                <option value="Digimon">Digimon</option>
+                                <option value="Other">Other</option>
+                            </select>
+                            <select id="action-select" class="p-2 border rounded">
+                                <option value="add">Add (+)</option>
+                                <option value="remove">Remove (-)</option>
+                            </select>
+                            <input type="number" id="qty-input" placeholder="Qty" min="1" class="p-2 border rounded">
+                            <button id="submit-transaction-btn" class="bg-blue-600 text-white font-bold rounded hover:bg-blue-700">
+                                Submit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOGS -->
+                <div id="logs-panel" class="bg-white p-6 rounded-lg shadow-sm hidden">
+                    <h3 class="text-lg font-bold text-gray-700 mb-4">Transaction History</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-gray-50 text-gray-500">
+                                <tr>
+                                    <th class="p-2">Date</th>
+                                    <th class="p-2">Staff</th>
+                                    <th class="p-2">Action</th>
+                                    <th class="p-2">Game</th>
+                                    <th class="p-2 text-right">Change</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-body">
+                                <!-- Loaded dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col space-y-2"></div>
+
+    <script>
+        const BASE_API = 'https://k10-system.onrender.com/api';
+        let allCustomers = [];
+        let selectedCustomerId = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('k10_token')) {
+                window.location.href = 'admin.html';
+                return;
+            }
+
+            loadCustomers();
+
+            document.getElementById('customer-search').addEventListener('input', filterCustomers);
+            document.getElementById('submit-transaction-btn').addEventListener('click', submitTransaction);
+            document.getElementById('logout-btn').addEventListener('click', () => {
+                localStorage.removeItem('k10_token');
+                window.location.href = 'admin.html';
+            });
+        });
+
+        async function loadCustomers() {
+            try {
+                const res = await fetch(`${BASE_API}/customers`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('k10_token')}` }
+                });
+                allCustomers = await res.json();
+                filterCustomers(); // Initial render
+            } catch (err) { console.error(err); }
+        }
+
+        function filterCustomers() {
+            const term = document.getElementById('customer-search').value.toLowerCase();
+            const list = document.getElementById('customer-list');
+
+            const filtered = allCustomers.filter(c =>
+                c.name.toLowerCase().includes(term) ||
+                c.contact_info.toLowerCase().includes(term)
+            );
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<p class="p-4 text-sm text-gray-500 text-center">No customers found.</p>';
+                return;
+            }
+
+            list.innerHTML = filtered.map(c => `
+                <div onclick="selectCustomer(${c.id})" class="p-3 cursor-pointer hover:bg-blue-50 transition ${selectedCustomerId === c.id ? 'bg-blue-100' : ''}">
+                    <div class="font-bold text-gray-800">${c.name}</div>
+                    <div class="text-xs text-gray-500">${c.contact_info}</div>
+                </div>
+            `).join('');
+        }
+
+        async function selectCustomer(id) {
+            selectedCustomerId = id;
+            const cust = allCustomers.find(c => c.id === id);
+
+            // Update UI
+            document.getElementById('sel-name').innerText = cust.name;
+            document.getElementById('sel-contact').innerText = cust.contact_info;
+            const badge = document.getElementById('sel-member-badge');
+
+            if (cust.is_member) {
+                badge.innerText = '⭐ Member';
+                badge.className = 'inline-block px-2 py-1 rounded bg-green-100 text-green-800 text-xs font-bold';
+            } else {
+                badge.innerText = 'Non-Member';
+                badge.className = 'inline-block px-2 py-1 rounded bg-gray-200 text-gray-600 text-xs font-bold';
+            }
+
+            document.getElementById('selected-customer-card').classList.remove('hidden');
+
+            // Enable Panel
+            const panel = document.getElementById('storage-panel');
+            panel.classList.remove('opacity-50', 'pointer-events-none');
+
+            // Load Data
+            await loadCustomerData(id);
+            filterCustomers(); // Re-render list to show highlight
+        }
+
+        async function loadCustomerData(id) {
+            try {
+                // Fetch Details (for storage)
+                const resDetails = await fetch(`${BASE_API}/customers/${id}/details`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('k10_token')}` }
+                });
+                const details = await resDetails.json();
+                renderStorage(details.storage);
+
+                // Fetch Logs
+                const resLogs = await fetch(`${BASE_API}/storage/logs/${id}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('k10_token')}` }
+                });
+                const logs = await resLogs.json();
+                renderLogs(logs);
+
+            } catch (err) { console.error(err); }
+        }
+
+        function renderStorage(storage) {
+            const grid = document.getElementById('current-storage-grid');
+            if (storage.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-gray-400 text-sm text-center italic py-4">No packs in storage.</div>';
+                return;
+            }
+            grid.innerHTML = storage.map(s => `
+                <div class="bg-blue-50 p-4 rounded text-center border border-blue-100">
+                    <div class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">${s.game_title}</div>
+                    <div class="text-2xl font-bold text-blue-700">${s.quantity}</div>
+                    <div class="text-xs text-gray-400">Packs</div>
+                </div>
+            `).join('');
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logs-body');
+            document.getElementById('logs-panel').classList.remove('hidden');
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">No history yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(l => `
+                <tr class="border-b">
+                    <td class="p-2 text-gray-600">${new Date(l.created_at).toLocaleDateString()} ${new Date(l.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                    <td class="p-2 font-medium">${l.staff_name || 'System'}</td>
+                    <td class="p-2 uppercase text-xs font-bold ${l.action_type === 'add' ? 'text-green-600' : 'text-red-600'}">${l.action_type}</td>
+                    <td class="p-2 text-gray-700">${l.game_title}</td>
+                    <td class="p-2 text-right font-mono ${l.change_amount > 0 ? 'text-green-600' : 'text-red-600'}">
+                        ${l.change_amount > 0 ? '+' : ''}${l.change_amount}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function submitTransaction() {
+            if (!selectedCustomerId) return;
+
+            const game = document.getElementById('game-select').value;
+            const action = document.getElementById('action-select').value;
+            const qty = document.getElementById('qty-input').value;
+
+            if (!qty || qty <= 0) {
+                showToast("Please enter a valid quantity", "error");
+                return;
+            }
+
+            try {
+                const res = await fetch(`${BASE_API}/storage/transaction`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('k10_token')}`
+                    },
+                    body: JSON.stringify({
+                        customer_id: selectedCustomerId,
+                        game_title: game,
+                        quantity: qty,
+                        action: action
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast("Storage Updated!", "success");
+                    document.getElementById('qty-input').value = ''; // Reset input
+                    loadCustomerData(selectedCustomerId); // Refresh UI
+                } else {
+                    showToast(data.error || "Update failed", "error");
+                }
+            } catch (err) {
+                showToast("Connection error", "error");
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = type === 'success' ? 'bg-green-600' : 'bg-red-600';
+            toast.className = `${colors} text-white px-6 py-3 rounded-lg shadow-lg mb-2`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
