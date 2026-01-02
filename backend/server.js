@@ -99,7 +99,7 @@ app.get('/api/inventory', async (req, res) => {
   }
 });
 
-// Add Product (Universal)
+// Add Product
 app.post('/api/inventory/add', async (req, res) => {
   const { 
     barcode, game_title, product_type, card_id, card_name, set_name, rarity, price, stock_quantity 
@@ -177,7 +177,7 @@ app.delete('/api/inventory/:id', async (req, res) => {
 // EVENT SYSTEM
 // ==========================================
 
-// ADMIN: Create Event
+// Create Event
 app.post('/api/events/create', async (req, res) => {
   const { title, game_title, event_date, entry_fee, max_players, description } = req.body;
   try {
@@ -193,7 +193,7 @@ app.post('/api/events/create', async (req, res) => {
   }
 });
 
-// PUBLIC: Get Upcoming Events
+// Get Upcoming Events
 app.get('/api/events', async (req, res) => {
   try {
     const [events] = await db.execute(
@@ -205,7 +205,7 @@ app.get('/api/events', async (req, res) => {
   }
 });
 
-// ADMIN: View Registered Players
+// View Registered Players
 app.get('/api/events/:id/players', async (req, res) => {
   const eventId = req.params.id;
   try {
@@ -224,7 +224,7 @@ app.get('/api/events/:id/players', async (req, res) => {
   }
 });
 
-// PUBLIC: Join Event
+// Join Event
 app.post('/api/events/join', async (req, res) => {
   const { event_id, player_name, contact_info } = req.body;
   
@@ -272,7 +272,7 @@ app.post('/api/events/join', async (req, res) => {
 // CUSTOMER CRM SYSTEM
 // ==========================================
 
-// 1. GET: List all customers
+// List all customers
 app.get('/api/customers', async (req, res) => {
     const { search } = req.query;
     try {
@@ -293,7 +293,7 @@ app.get('/api/customers', async (req, res) => {
     }
 });
 
-// 2. POST: Manual Registration (Admin)
+// Manual Registration
 app.post('/api/customers/create', async (req, res) => {
     const { name, contact_info } = req.body;
     
@@ -316,7 +316,7 @@ app.post('/api/customers/create', async (req, res) => {
 });
 
 // ==========================================
-// PACK STORAGE SYSTEM
+// PACK STORAGE SYSTEM (Strict Security)
 // ==========================================
 
 // 1. GET: See all stored packs
@@ -335,22 +335,40 @@ app.get('/api/storage', async (req, res) => {
   }
 });
 
-// 2. POST: Deposit or Withdraw Packs
+// 2. POST: Deposit Packs (STRICT MODE)
 app.post('/api/storage/update', async (req, res) => {
-  const { customer_id, game_title, pack_type, change_amount } = req.body;
+  const { customer_id, game_title, pack_type, change_amount, event_id } = req.body;
 
   try {
-    // Check if row exists
+    // --- SECURITY CHECK (Only for Deposits) ---
+    if (change_amount > 0) {
+        if (!event_id) {
+            return res.status(400).json({ error: "You must select the Event this customer played in." });
+        }
+
+        // Verify they actually registered for this specific event
+        const [registration] = await db.execute(
+            `SELECT id FROM event_registrations WHERE customer_id = ? AND event_id = ?`,
+            [customer_id, event_id]
+        );
+
+        if (registration.length === 0) {
+            return res.status(403).json({ error: "Security Alert: This customer did NOT join that event." });
+        }
+    }
+    // ------------------------------------------
+
+    // Check if storage row exists
     const [existing] = await db.execute(
       `SELECT id, quantity FROM customer_packs 
        WHERE customer_id = ? AND game_title = ? AND pack_type = ?`,
-      [customer_id, game_title, pack_type]
+      [customer_id, game_title, pack_type || 'Standard Booster']
     );
 
     if (existing.length > 0) {
       // UPDATE existing record
       const newQuantity = existing[0].quantity + parseInt(change_amount);
-      if (newQuantity < 0) return res.status(400).json({ error: "Not enough packs in storage!" });
+      if (newQuantity < 0) return res.status(400).json({ error: "Not enough packs to withdraw." });
 
       await db.execute('UPDATE customer_packs SET quantity = ? WHERE id = ?', [newQuantity, existing[0].id]);
     } else {
@@ -359,16 +377,18 @@ app.post('/api/storage/update', async (req, res) => {
       
       await db.execute(
         `INSERT INTO customer_packs (customer_id, game_title, pack_type, quantity) VALUES (?, ?, ?, ?)`,
-        [customer_id, game_title, pack_type, change_amount]
+        [customer_id, game_title, pack_type || 'Standard Booster', change_amount]
       );
     }
+
     res.json({ message: 'Storage updated successfully!' });
   } catch (error) {
+    console.error("Update Error:", error);
     res.status(500).json({ error: 'Failed to update storage.' });
   }
 });
 
-// 3. GET: Search Customer for Dropdown
+// 3. GET: Search Customer (Helper)
 app.get('/api/customers/search', async (req, res) => {
     const { q } = req.query;
     try {
@@ -382,19 +402,4 @@ app.get('/api/customers/search', async (req, res) => {
     }
 });
 
-// ==========================================
-// KEEP-ALIVE (Prevents Aiven from sleeping)
-// ==========================================
-setInterval(async () => {
-  try {
-    await db.execute('SELECT 1');
-    // console.log('⏰ Keep-alive ping successful'); // Uncomment to see in logs
-  } catch (error) {
-    console.error('⏰ Keep-alive ping failed:', error.message);
-  }
-}, 5 * 60 * 1000); // Run every 5 minutes
-
-// --- START SERVER ---
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// 4. GET: Fetch Recent Events for Customer (New Helper
