@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K10 Admin - Preorder Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+
+    <script src="admin-navbar.js"></script>
+
+    <div class="max-w-7xl mx-auto px-4 mt-8 pb-12">
+        
+        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-purple-500 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-end gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">⏳ Active Preorder Queue</h2>
+                    <p class="text-gray-500 text-sm">Manage outstanding reservations.</p>
+                </div>
+                
+                <div class="flex gap-2 w-full md:w-auto">
+                    <select id="filter-game" onchange="applyFilters()" class="p-2 border rounded bg-gray-50 font-bold text-gray-700">
+                        <option value="">All Games</option>
+                        <option value="One Piece">One Piece</option>
+                        <option value="Pokemon">Pokemon</option>
+                        <option value="Hololive">Hololive</option>
+                        <option value="Digimon">Digimon</option>
+                        <option value="Other">Other</option>
+                    </select>
+
+                    <select id="filter-category" onchange="applyFilters()" class="p-2 border rounded bg-gray-50 font-bold text-gray-700">
+                        <option value="">All Categories</option>
+                    </select>
+                    
+                    <input type="text" id="filter-search" onkeyup="applyFilters()" 
+                           placeholder="Search Customer or Item..." 
+                           class="p-2 border rounded shadow-sm w-full md:w-64 focus:ring-2 focus:ring-purple-500 outline-none">
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden min-h-[500px]">
+            <table class="w-full text-left border-collapse">
+                <thead class="bg-gray-50 border-b text-xs uppercase font-bold text-gray-500">
+                    <tr>
+                        <th class="p-4">Date</th>
+                        <th class="p-4">Customer</th>
+                        <th class="p-4">Items Reserved</th>
+                        <th class="p-4">Payment / Balance</th>
+                        <th class="p-4">Status</th>
+                        <th class="p-4 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="preorder-table"></tbody>
+            </table>
+            
+            <div id="loading" class="p-12 text-center text-gray-500">Loading queue...</div>
+            <div id="empty-state" class="p-12 text-center text-gray-400 hidden">No matching preorders found.</div>
+        </div>
+    </div>
+
+    <div id="pay-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-[90]">
+        <div class="bg-white rounded-lg shadow-xl w-96 p-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Add Payment</h3>
+            <p class="text-sm text-gray-500 mb-4 whitespace-pre-line" id="pay-modal-desc">...</p>
+            <input type="hidden" id="pay-order-id">
+            <input type="hidden" id="pay-balance">
+            <div class="mb-4">
+                <label class="text-xs font-bold text-gray-500 uppercase">Amount ($)</label>
+                <input type="number" id="pay-amount" class="w-full p-2 border-2 border-green-500 rounded text-xl font-bold text-green-700 bg-green-50 focus:outline-none">
+            </div>
+            <div class="flex flex-col gap-2">
+                <button onclick="confirmPayment()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded shadow transition">Confirm Payment</button>
+                <button onclick="setFullPayment()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded transition">Mark Fully Paid</button>
+                <button onclick="closePayModal()" class="text-gray-400 font-bold py-2 text-sm hover:text-gray-600">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://k10system.onrender.com/api';
+        let globalOrders = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('k10_token')) window.location.href = 'admin.html';
+            await loadCategories();
+            await loadPreorders();
+        });
+
+        // LOAD CATEGORIES FOR THE FILTER (NEW)
+        async function loadCategories() {
+            const res = await fetch(`${API_URL}/categories`);
+            const cats = await res.json();
+            const filterDropdown = document.getElementById('filter-category');
+            filterDropdown.innerHTML = '<option value="">All Categories</option>' + 
+                                       cats.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+        }
+
+        async function loadPreorders() {
+            const loading = document.getElementById('loading');
+            loading.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${API_URL}/sales/preorders`);
+                globalOrders = await res.json();
+                loading.classList.add('hidden');
+                applyFilters(); 
+            } catch (err) { loading.innerText = "Error loading data."; }
+        }
+
+        function applyFilters() {
+            const gameFilter = document.getElementById('filter-game').value.toLowerCase();
+            const catFilter = document.getElementById('filter-category').value.toLowerCase(); // NEW
+            const searchText = document.getElementById('filter-search').value.toLowerCase();
+            const tbody = document.getElementById('preorder-table');
+            const empty = document.getElementById('empty-state');
+
+            const filtered = globalOrders.filter(o => {
+                const tags = (o.game_tags || '').toLowerCase();
+                const itemSummary = (o.items_summary || '').toLowerCase();
+                
+                const hasGame = gameFilter === '' || tags.includes(gameFilter);
+                const hasCat = catFilter === '' || itemSummary.includes(catFilter); // Checks summary for category name
+                
+                const hasText = searchText === '' || 
+                                o.customer_name.toLowerCase().includes(searchText) || 
+                                (o.mobile_number && o.mobile_number.includes(searchText)) ||
+                                itemSummary.includes(searchText);
+
+                return hasGame && hasCat && hasText;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            
+            empty.classList.add('hidden');
+            tbody.innerHTML = filtered.map(o => {
+                const deposit = parseFloat(o.deposit_amount || 0);
+                const total = parseFloat(o.total_amount || 0);
+                const balance = total - deposit;
+                const gameTags = o.game_tags ? o.game_tags.split(',').join(' • ') : 'No Game Tag';
+
+                const paymentDisplay = balance <= 0.01 
+                    ? `<div class="text-green-600 font-bold flex items-center gap-1"><span>✅</span> Fully Paid ($${total.toFixed(2)})</div>`
+                    : `<div><span class="text-gray-800 font-bold">$${deposit.toFixed(2)} Paid</span><div class="text-xs text-red-500 font-bold mt-0.5">Owe: $${balance.toFixed(2)}</div></div>`;
+
+                return `
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="p-4 text-sm text-gray-500">${new Date(o.order_date).toLocaleDateString()}</td>
+                    <td class="p-4">
+                        <div class="font-bold text-gray-800">${o.customer_name}</div>
+                        <div class="text-xs text-gray-400">${o.mobile_number || 'No Contact'}</div>
+                    </td>
+                    <td class="p-4">
+                        <div class="text-sm text-purple-700 font-medium">${o.items_summary}</div>
+                        <div class="text-[10px] text-gray-400 uppercase mt-1 tracking-wider border border-gray-200 inline-block px-1 rounded bg-gray-50">
+                            ${gameTags}
+                        </div>
+                    </td>
+                    <td class="p-4">${paymentDisplay}</td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded text-xs font-bold uppercase ${o.status === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-800'}">
+                            ${o.status}
+                        </span>
+                    </td>
+                    <td class="p-4 text-right flex justify-end gap-2 items-center">
+                        ${balance > 0.01 ? `<button onclick="openPayModal(${o.id}, '${o.customer_name}', ${balance})" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-bold shadow-sm transition">💰 Pay</button>` : ''}
+                        <button onclick="markFulfilled(${o.id})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-bold shadow-sm transition">✅ Fulfill</button>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        // Action functions (confirmPayment, markFulfilled, etc.) remain identical to your previous version...
+        function openPayModal(id, name, balance) {
+            document.getElementById('pay-order-id').value = id;
+            document.getElementById('pay-balance').value = balance;
+            document.getElementById('pay-modal-desc').innerText = `Customer: ${name}\nOutstanding Balance: $${balance.toFixed(2)}`;
+            document.getElementById('pay-amount').value = ''; 
+            document.getElementById('pay-modal').classList.remove('hidden');
+            document.getElementById('pay-amount').focus();
+        }
+        function setFullPayment() {
+            document.getElementById('pay-amount').value = parseFloat(document.getElementById('pay-balance').value).toFixed(2);
+        }
+        function closePayModal() { document.getElementById('pay-modal').classList.add('hidden'); }
+        
+        async function confirmPayment() {
+            const id = document.getElementById('pay-order-id').value;
+            const amount = document.getElementById('pay-amount').value;
+            if(!amount || amount <= 0) return alert("Enter valid amount");
+            try {
+                const res = await fetch(`${API_URL}/sales/${id}/payment`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount })
+                });
+                if(res.ok) { alert("Paid!"); closePayModal(); loadPreorders(); }
+            } catch(e) { alert("Connection Error"); }
+        }
+
+        async function markFulfilled(id) {
+            if(confirm("Complete this order?")) {
+                await fetch(`${API_URL}/sales/${id}/fulfill`, { method: 'PUT' });
+                loadPreorders();
+            }
+        }
+    </script>
+</body>
+</html>

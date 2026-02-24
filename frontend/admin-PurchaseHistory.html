@@ -2,245 +2,292 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K10 Admin - Purchase History</title>
+    <title>K10 Admin - PO History & Tracking</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-gray-100 font-sans text-gray-800">
 
-    <nav class="bg-white shadow-sm mb-8 px-4 py-4 flex justify-between items-center">
-        <h1 class="text-xl font-bold text-gray-800">📜 Purchase History (Distributors)</h1>
-        <div class="space-x-4">
-            <a href="admin.html" class="text-gray-600 hover:text-blue-600 font-medium">Inventory</a>
-            <a href="admin-purchase.html" class="text-gray-600 hover:text-blue-600 font-medium">New Order</a>
-            <a href="admin-PurchaseHistory.html" class="text-blue-600 font-bold border-b-2 border-blue-600 pb-1">History</a>
-            <button id="logout-btn" class="text-red-600 font-semibold ml-4">Logout</button>
-        </div>
-    </nav>
+    <script src="admin-navbar.js"></script>
 
-    <div class="max-w-7xl mx-auto px-4">
+    <div class="max-w-7xl mx-auto px-4 mt-8 pb-12">
         
-        <div class="bg-white p-6 rounded-lg shadow-sm mb-6 border-l-4 border-blue-600">
-            <div class="flex flex-col md:flex-row justify-between items-end gap-4">
+        <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-600 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
-                    <h2 class="text-lg font-bold text-gray-800 mb-2">Filter Options</h2>
-                    <div class="flex flex-wrap gap-2 items-end">
-                        <div>
-                            <label class="text-xs font-bold text-gray-500 block">Start Date</label>
-                            <input type="date" id="start-date" class="p-2 border rounded text-sm">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-500 block">End Date</label>
-                            <input type="date" id="end-date" class="p-2 border rounded text-sm">
-                        </div>
-                        <div class="flex gap-1">
-                            <button onclick="setDateRange('2025')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded text-xs font-bold">2025 (Last Year)</button>
-                            <button onclick="setDateRange('2026')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded text-xs font-bold">2026 (This Year)</button>
-                            <button onclick="resetFilters()" class="text-red-500 hover:underline px-3 py-2 text-xs font-bold">Clear</button>
-                        </div>
-                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800">📜 Purchase History</h2>
+                    <p class="text-gray-500 text-sm italic">Manage Deliveries, Invoices & Payments</p>
                 </div>
                 
-                <div class="w-full md:w-auto text-right">
-                    <label class="text-xs font-bold text-gray-500 block mb-1">Total Spent in Period</label>
-                    <div id="period-total" class="text-3xl font-bold text-gray-800">$0.00</div>
+                <div class="flex gap-2 w-full md:w-auto">
+                    <input type="text" id="filter-search" onkeyup="applyFilters()" 
+                           placeholder="Search PO or Supplier..." 
+                           class="p-2 border rounded shadow-sm w-full md:w-64 outline-none focus:ring-2 focus:ring-blue-500">
+                    <select id="filter-status" onchange="applyFilters()" class="p-2 border rounded font-bold text-gray-600">
+                        <option value="">All Status</option>
+                        <option value="Ordered">Ordered</option>
+                        <option value="Received">Received</option>
+                        <option value="Partial">Partial Delivery</option>
+                    </select>
                 </div>
-            </div>
-            
-            <div class="flex gap-2 mt-4 pt-4 border-t">
-                <input type="text" id="search-input" placeholder="Search PO # or Supplier..." class="p-2 border rounded w-full md:w-64">
-                <select id="status-filter" class="p-2 border rounded bg-white">
-                    <option value="">All Statuses</option>
-                    <option value="Ordered">Ordered</option>
-                    <option value="Invoiced">Invoiced</option>
-                    <option value="Received">Received</option>
-                </select>
-                <button onclick="loadOrders()" class="bg-blue-600 text-white px-6 rounded font-bold hover:bg-blue-700">Filter</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden min-h-[500px] mb-12">
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden min-h-[500px]">
             <table class="w-full text-left border-collapse">
-                <thead class="bg-gray-50 border-b text-xs uppercase font-bold text-gray-500">
+                <thead class="bg-gray-50 border-b text-[10px] uppercase font-bold text-gray-400">
                     <tr>
-                        <th class="p-4">PO Number</th>
-                        <th class="p-4">Date</th>
+                        <th class="p-4">PO Details</th>
                         <th class="p-4">Supplier</th>
-                        <th class="p-4 text-center">Items</th>
-                        <th class="p-4">Total Cost</th>
-                        <th class="p-4">Status</th>
-                        <th class="p-4 text-right">Action</th>
+                        <th class="p-4">Financial Status</th>
+                        <th class="p-4">Delivery</th>
+                        <th class="p-4 text-right">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="history-table-body"></tbody>
+                <tbody id="po-table-body"></tbody>
             </table>
-            <div id="loading" class="p-12 text-center text-gray-500 hidden">Loading records...</div>
-            <div id="empty-state" class="p-12 text-center text-gray-400 hidden">No records found for this period.</div>
+            <div id="loading" class="p-12 text-center text-gray-500 font-bold">⏳ Loading records...</div>
         </div>
     </div>
 
-    <div id="detail-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]">
-            <div class="p-6 border-b flex justify-between items-center bg-gray-50">
-                <div>
-                    <h3 class="text-xl font-bold text-gray-800" id="modal-title">...</h3>
-                    <p class="text-sm text-gray-500" id="modal-subtitle">...</p>
-                </div>
-                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
-            <div class="p-0 overflow-y-auto flex-grow">
-                <table class="w-full text-left text-sm">
-                    <thead class="bg-gray-100 text-gray-500 font-bold">
+    <div id="details-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-[80]">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 p-6 relative">
+            <h3 class="text-xl font-bold text-gray-800 mb-4" id="modal-title">PO Details</h3>
+            
+            <div class="overflow-y-auto max-h-[60vh] border rounded">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 text-gray-500 uppercase font-bold text-[10px]">
                         <tr>
-                            <th class="p-4">Product</th>
-                            <th class="p-4 text-center">Ordered</th>
-                            <th class="p-4 text-center">Allocated</th>
-                            <th class="p-4 text-right">Unit Cost</th>
-                            <th class="p-4 text-right">Subtotal</th>
+                            <th class="p-3">Product</th>
+                            <th class="p-3 text-center">Ordered</th>
+                            <th class="p-3 text-center">Previously Recv.</th>
+                            <th class="p-3 text-center bg-blue-50">Receive Now</th>
+                            <th class="p-3 text-right">Unit Cost</th>
                         </tr>
                     </thead>
-                    <tbody id="modal-items"></tbody>
+                    <tbody id="modal-body"></tbody>
                 </table>
             </div>
-            <div class="p-6 border-t bg-gray-50 flex justify-end">
-                <button onclick="closeModal()" class="bg-white border border-gray-300 text-gray-700 font-bold py-2 px-6 rounded">Close</button>
+            
+            <div class="flex justify-between items-center mt-6 pt-4 border-t">
+                <button onclick="closeModal('details-modal')" class="text-gray-500 font-bold px-4 hover:underline">Close</button>
+                <button onclick="processDelivery()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-8 rounded shadow-lg">
+                    Confirm Delivery
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="payment-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-[90]">
+        <div class="bg-white rounded-lg shadow-xl w-96 p-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Record Payment</h3>
+            <p id="pay-po-num" class="text-xs text-blue-600 font-bold mb-4 uppercase tracking-widest"></p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase">Invoice Number</label>
+                    <input type="text" id="pay-invoice-no" class="w-full p-2 border rounded font-bold outline-none focus:border-blue-500">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-400 uppercase">Payment Date</label>
+                        <input type="date" id="pay-date" class="w-full p-2 border rounded text-xs">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-400 uppercase">Invoiced Total ($)</label>
+                        <input type="number" id="pay-total-cost" step="0.01" class="w-full p-2 border rounded font-bold bg-gray-50">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase">Amount Paid Now ($)</label>
+                    <input type="number" id="pay-amount" step="0.01" class="w-full p-2 border-2 border-green-500 rounded text-lg font-bold text-green-700 bg-green-50 outline-none">
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2 mt-6">
+                <button onclick="confirmPayment()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded shadow transition active:scale-95">
+                    Save Payment & Invoice
+                </button>
+                <button onclick="closeModal('payment-modal')" class="text-gray-400 font-bold py-2 text-sm hover:text-gray-600">
+                    Cancel
+                </button>
             </div>
         </div>
     </div>
 
     <script>
         const API_URL = 'https://k10system.onrender.com/api';
+        let globalOrders = [];
+        let currentPOId = null;
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const token = localStorage.getItem('k10_token');
-            if (!token) window.location.href = 'admin.html';
-            
-            // Default to "This Year"
-            setDateRange('2026');
-            loadOrders();
+        document.addEventListener('DOMContentLoaded', loadHistory);
 
-            document.getElementById('logout-btn').addEventListener('click', () => {
-                localStorage.removeItem('k10_token');
-                window.location.href = 'admin.html';
-            });
-        });
-
-        function setDateRange(year) {
-            document.getElementById('start-date').value = `${year}-01-01`;
-            document.getElementById('end-date').value = `${year}-12-31`;
-            loadOrders();
-        }
-
-        function resetFilters() {
-            document.getElementById('start-date').value = '';
-            document.getElementById('end-date').value = '';
-            document.getElementById('search-input').value = '';
-            document.getElementById('status-filter').value = '';
-            loadOrders();
-        }
-
-        async function loadOrders() {
-            const startDate = document.getElementById('start-date').value;
-            const endDate = document.getElementById('end-date').value;
-            const search = document.getElementById('search-input').value;
-            const status = document.getElementById('status-filter').value;
-            
-            const tbody = document.getElementById('history-table-body');
-            const loading = document.getElementById('loading');
-            const empty = document.getElementById('empty-state');
-            
-            tbody.innerHTML = '';
-            loading.classList.remove('hidden');
-            empty.classList.add('hidden');
-
+        async function loadHistory() {
             try {
-                // Construct URL with Query Params
-                const params = new URLSearchParams({
-                    limit: 1000, // Fetch up to 1000 for accounting
-                    search,
-                    status,
-                    startDate,
-                    endDate
-                });
-
-                const res = await fetch(`${API_URL}/purchase-orders?${params}`);
-                const orders = await res.json();
-                
-                loading.classList.add('hidden');
-
-                if (orders.length === 0) {
-                    empty.classList.remove('hidden');
-                    document.getElementById('period-total').innerText = '$0.00';
-                    return;
-                }
-
-                let grandTotal = 0;
-
-                tbody.innerHTML = orders.map(po => {
-                    const cost = parseFloat(po.total_cost || 0);
-                    grandTotal += cost;
-                    
-                    return `
-                    <tr class="border-b hover:bg-gray-50 transition">
-                        <td class="p-4 font-mono font-bold text-blue-600">${po.po_number}</td>
-                        <td class="p-4 text-sm text-gray-500">${new Date(po.order_date || po.created_at).toLocaleDateString()}</td>
-                        <td class="p-4 font-medium text-gray-700">${po.supplier_name}</td>
-                        <td class="p-4 text-center text-gray-500">${po.total_items}</td>
-                        <td class="p-4 font-bold text-gray-800">$${cost.toFixed(2)}</td>
-                        <td class="p-4">
-                            <span class="px-2 py-1 rounded-full text-xs font-bold uppercase ${getStatusClass(po.status)}">
-                                ${po.status}
-                            </span>
-                        </td>
-                        <td class="p-4 text-right">
-                            <button onclick="viewDetails(${po.id}, '${po.po_number}', '${po.supplier_name}')" 
-                                    class="text-blue-600 hover:text-blue-800 font-bold text-sm">View Items</button>
-                        </td>
-                    </tr>
-                    `;
-                }).join('');
-
-                document.getElementById('period-total').innerText = `$${grandTotal.toFixed(2)}`;
-
-            } catch (err) {
-                console.error(err);
-                loading.innerText = "Error loading data.";
+                const res = await fetch(`${API_URL}/purchase-orders`);
+                globalOrders = await res.json();
+                document.getElementById('loading').classList.add('hidden');
+                applyFilters();
+            } catch (e) {
+                document.getElementById('loading').innerText = "Error loading history.";
             }
         }
 
-        async function viewDetails(id, poNum, supplier) {
-            document.getElementById('modal-title').innerText = poNum;
-            document.getElementById('modal-subtitle').innerText = supplier;
-            document.getElementById('detail-modal').classList.remove('hidden');
-            document.getElementById('modal-items').innerHTML = '<tr><td colspan="5" class="p-4 text-center">Loading...</td></tr>';
+        function applyFilters() {
+            const search = document.getElementById('filter-search').value.toLowerCase();
+            const status = document.getElementById('filter-status').value;
+            const tbody = document.getElementById('po-table-body');
 
+            const filtered = globalOrders.filter(o => {
+                const matchSearch = o.po_number.toLowerCase().includes(search) || o.supplier_name.toLowerCase().includes(search);
+                const matchStatus = !status || o.status === status;
+                return matchSearch && matchStatus;
+            });
+
+            tbody.innerHTML = filtered.map(o => {
+                const total = parseFloat(o.total_cost || o.total_value || 0);
+                const paid = parseFloat(o.paid_amount || 0);
+                const isFullyPaid = paid >= (total - 0.01) && total > 0;
+                
+                return `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="p-4">
+                        <div class="font-mono font-bold text-blue-600">#${o.po_number}</div>
+                        <div class="text-[10px] text-gray-400">${new Date(o.order_date).toLocaleDateString()}</div>
+                        ${o.invoice_no ? `<div class="text-[9px] font-bold text-purple-600 mt-1 uppercase">Inv: ${o.invoice_no}</div>` : ''}
+                    </td>
+                    <td class="p-4 font-bold text-gray-700">${o.supplier_name}</td>
+                    <td class="p-4">
+                        <div class="font-bold">$${total.toFixed(2)}</div>
+                        <div class="text-[10px] uppercase font-bold ${isFullyPaid ? 'text-green-500' : 'text-orange-500'}">
+                            ${isFullyPaid ? '✅ Fully Paid' : `Paid: $${paid.toFixed(2)}`}
+                        </div>
+                    </td>
+                    <td class="p-4">
+                        <span class="px-2 py-1 rounded text-[10px] font-bold uppercase bg-gray-100 text-gray-600">
+                            ${o.status}
+                        </span>
+                    </td>
+                    <td class="p-4 text-right flex justify-end gap-2 items-center">
+                        <button onclick="openPaymentModal(${JSON.stringify(o).replace(/"/g, '&quot;')})" 
+                                class="bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1 rounded text-[10px] font-bold uppercase hover:bg-blue-100 transition">
+                            Pay / Invoice
+                        </button>
+                        <button onclick="viewDetails(${o.id}, '${o.po_number}')" 
+                                class="bg-gray-800 text-white px-3 py-1 rounded text-[10px] font-bold uppercase hover:bg-black transition">
+                            Receive
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function openPaymentModal(o) {
+            currentPOId = o.id;
+            const originalVal = parseFloat(o.total_cost || o.total_value || 0);
+            
+            document.getElementById('pay-po-num').innerText = `PO: ${o.po_number}`;
+            document.getElementById('pay-invoice-no').value = o.invoice_no || '';
+            document.getElementById('pay-date').value = o.payment_date ? o.payment_date.split('T')[0] : new Date().toISOString().split('T')[0];
+            document.getElementById('pay-total-cost').value = originalVal.toFixed(2);
+            
+            // Suggest remaining balance as payment amount
+            const remaining = originalVal - parseFloat(o.paid_amount || 0);
+            document.getElementById('pay-amount').value = remaining > 0 ? remaining.toFixed(2) : "0.00";
+            
+            document.getElementById('payment-modal').classList.remove('hidden');
+        }
+
+        async function confirmPayment() {
+            const payload = {
+                invoice_no: document.getElementById('pay-invoice-no').value,
+                payment_date: document.getElementById('pay-date').value,
+                amount_paid: document.getElementById('pay-amount').value,
+                final_total_cost: document.getElementById('pay-total-cost').value
+            };
+
+            if (!payload.final_total_cost || payload.final_total_cost <= 0) return alert("Please enter the invoiced total.");
+
+            try {
+                const res = await fetch(`${API_URL}/purchase-orders/${currentPOId}/payment`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert("Payment and Invoice Recorded!");
+                    closeModal('payment-modal');
+                    loadHistory();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + err.error);
+                }
+            } catch (e) { alert("Connection Error"); }
+        }
+
+        async function viewDetails(id, poNum) {
+            currentPOId = id;
+            document.getElementById('modal-title').innerText = `Stock-In: ${poNum}`;
+            document.getElementById('details-modal').classList.remove('hidden');
+            
             try {
                 const res = await fetch(`${API_URL}/purchase-orders/${id}`);
                 const items = await res.json();
                 
-                document.getElementById('modal-items').innerHTML = items.map(i => `
+                document.getElementById('modal-body').innerHTML = items.map(i => `
                     <tr class="border-b">
-                        <td class="p-4 font-medium">
-                            ${i.card_name}
-                            <div class="text-xs text-gray-400">${i.set_name || ''}</div>
+                        <td class="p-3">
+                            <div class="font-bold text-gray-800">${i.card_name}</div>
+                            <input type="hidden" class="item-id" value="${i.inventory_id}">
+                            <input type="hidden" class="po-item-id" value="${i.id}">
                         </td>
-                        <td class="p-4 text-center font-bold">${i.ordered_qty}</td>
-                        <td class="p-4 text-center ${i.allocated_qty < i.ordered_qty ? 'text-red-500' : 'text-green-600'}">
-                            ${i.allocated_qty}
+                        <td class="p-3 text-center font-bold text-gray-400">${i.ordered_qty}</td>
+                        <td class="p-3 text-center font-bold text-gray-500">${i.received_qty || 0}</td>
+                        <td class="p-3 text-center bg-blue-50">
+                            <input type="number" class="receive-qty w-16 p-1 border rounded text-center font-bold border-blue-300" 
+                                   value="${i.ordered_qty - (i.received_qty || 0)}" max="${i.ordered_qty - (i.received_qty || 0)}">
                         </td>
-                        <td class="p-4 text-right font-mono text-gray-500">$${i.unit_cost}</td>
-                        <td class="p-4 text-right font-bold">$${(i.allocated_qty * i.unit_cost).toFixed(2)}</td>
+                        <td class="p-3 text-right font-mono text-gray-500">$${parseFloat(i.unit_cost).toFixed(2)}</td>
                     </tr>
                 `).join('');
-            } catch (err) { console.error(err); }
+            } catch (e) { alert("Failed to load PO details."); }
         }
 
-        function closeModal() { document.getElementById('detail-modal').classList.add('hidden'); }
-        function getStatusClass(s) {
-            if (s === 'Ordered') return 'bg-yellow-100 text-yellow-700';
-            if (s === 'Received') return 'bg-green-100 text-green-700';
-            return 'bg-blue-100 text-blue-700';
+        async function processDelivery() {
+            const rows = document.querySelectorAll('#modal-body tr');
+            const items = [];
+            
+            rows.forEach(row => {
+                const qty = parseInt(row.querySelector('.receive-qty').value);
+                if (qty > 0) {
+                    items.push({
+                        po_item_id: row.querySelector('.po-item-id').value,
+                        inventory_id: row.querySelector('.item-id').value,
+                        qty_received: qty
+                    });
+                }
+            });
+
+            if(items.length === 0) return alert("Nothing to receive.");
+
+            try {
+                const res = await fetch(`${API_URL}/purchase-orders/${currentPOId}/receive`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+
+                if(res.ok) {
+                    alert("Inventory Updated Successfully!");
+                    closeModal('details-modal');
+                    loadHistory();
+                }
+            } catch (e) { alert("Update failed."); }
         }
+
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
     </script>
 </body>
 </html>
